@@ -10,6 +10,7 @@ add_executable(emulator
     src/main.c
     src/input.c
     src/graphics.c
+    src/cartridge.c
 )
 
 target_compile_options(emulator PRIVATE
