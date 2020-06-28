@@ -8,6 +8,8 @@ find_package(SDL2 REQUIRED)
 
 add_executable(emulator
     src/main.c
+    src/input.c
+    src/graphics.c
 )
 
 target_compile_options(emulator PRIVATE
@@ -15,7 +17,9 @@ target_compile_options(emulator PRIVATE
     -pedantic
     -Wall
     -Wextra
+    # -Werror
     -Werror=return-type
+    -Werror=implicit-function-declaration
     -O2
 )
 
