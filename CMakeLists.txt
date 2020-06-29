@@ -11,6 +11,7 @@ add_executable(emulator
     src/input.c
     src/graphics.c
     src/cartridge.c
+    src/memory.c
 )
 
 target_compile_options(emulator PRIVATE

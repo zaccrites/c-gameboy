@@ -25,10 +25,9 @@ struct CartridgeHeader
 };
 
 
+void cartridge_get_header(const struct Cartridge *cartridge, struct CartridgeHeader *header);
 bool cartridge_load(struct Cartridge *cartridge, const char *romPath);
 void cartridge_teardown(struct Cartridge *cartridge);
-
-void cartridge_get_header(const struct Cartridge *cartridge, struct CartridgeHeader* header);
 
 
 #endif

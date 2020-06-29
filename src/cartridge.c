@@ -39,7 +39,7 @@ void cartridge_teardown(struct Cartridge *cartridge)
 }
 
 
-void cartridge_get_header(const struct Cartridge *cartridge, struct CartridgeHeader* header)
+void cartridge_get_header(const struct Cartridge *cartridge, struct CartridgeHeader *header)
 {
     memcpy(header->title, &cartridge->data[0x0134], CARTRIDGE_HEADER_TITLE_LENGTH);
     header->title[CARTRIDGE_HEADER_TITLE_LENGTH] = '\0';

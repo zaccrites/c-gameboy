@@ -5,6 +5,7 @@
 #include "input.h"
 #include "graphics.h"
 #include "cartridge.h"
+#include "memory.h"
 
 
 int main(int argc, char **argv)
@@ -17,14 +18,6 @@ int main(int argc, char **argv)
 
     int statusCode = 0;
 
-    struct Graphics graphics;
-    if ( ! graphics_init(&graphics))
-    {
-        fprintf(stderr, "Error: Failed to start the graphics! \n");
-        statusCode = 1;
-        goto cleanup_graphics;
-    }
-
     struct Cartridge cartridge;
     if ( ! cartridge_load(&cartridge, argv[1]))
     {
@@ -36,6 +29,22 @@ int main(int argc, char **argv)
     struct CartridgeHeader cartridgeHeader;
     cartridge_get_header(&cartridge, &cartridgeHeader);
     printf("Loaded ROM \"%s\" (%ld bytes)\n", cartridgeHeader.title, cartridge.dataSize);
+
+    struct Memory memory;
+    if ( ! memory_init(&memory, &cartridge))
+    {
+        fprintf(stderr, "Error: Failed to create the memory mapper! \n");
+        statusCode = 1;
+        goto cleanup_memory;
+    }
+
+    struct Graphics graphics;
+    if ( ! graphics_init(&graphics))
+    {
+        fprintf(stderr, "Error: Failed to start the graphics! \n");
+        statusCode = 1;
+        goto cleanup_graphics;
+    }
 
     bool isRunning = true;
     while (isRunning)
@@ -52,11 +61,12 @@ int main(int argc, char **argv)
         SDL_Delay(16);
     }
 
-
-cleanup_cartridge:
-    cartridge_teardown(&cartridge);
 cleanup_graphics:
     graphics_teardown(&graphics);
+cleanup_memory:
+    memory_teardown(&memory);
+cleanup_cartridge:
+    cartridge_teardown(&cartridge);
 
     return statusCode;
 }
