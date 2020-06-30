@@ -1,27 +1,19 @@
 
+#include <SDL2/SDL.h>
+
 #include "input.h"
 
 
 struct InputState input_get_state(void)
 {
-    struct InputState state = {
-        .quit = false,
-        .buttonA = false,
-        .buttonB = false,
-        .buttonStart = false,
-        .buttonSelect = false,
-        .dpadLeft = false,
-        .dpadRight = false,
-        .dpadUp = false,
-        .dpadDown = false,
-    };
+    bool quit = false;
 
     SDL_Event event;
     while (SDL_PollEvent(&event))
     {
         if (event.type == SDL_QUIT)
         {
-            state.quit = true;
+            quit = true;
         }
         else if (event.type == SDL_KEYDOWN)
         {
@@ -29,38 +21,25 @@ struct InputState input_get_state(void)
             {
             case SDLK_ESCAPE:
             case SDLK_q:
-                state.quit = true;
-                break;
-
-            case SDLK_UP:
-                state.dpadUp = true;
-                break;
-            case SDLK_DOWN:
-                state.dpadDown = true;
-                break;
-            case SDLK_LEFT:
-                state.dpadLeft = true;
-                break;
-            case SDLK_RIGHT:
-                state.dpadRight = true;
-                break;
-
-            case SDLK_z:
-                state.buttonA = true;
-                break;
-            case SDLK_x:
-                state.buttonB = true;
-                break;
-
-            case SDLK_RETURN:
-                state.buttonStart = true;
-                break;
-            case SDLK_RSHIFT:
-                state.buttonSelect = true;
+                quit = true;
                 break;
             }
         }
     }
 
-    return state;
+    // Note: MUST process events before calling SDL_KeyKeyboardState()
+    const uint8_t *keystate = SDL_GetKeyboardState(NULL);
+    struct InputState inputState = {
+        .quit = quit,
+
+        .buttonA = keystate[SDL_SCANCODE_Z],
+        .buttonB = keystate[SDL_SCANCODE_X],
+        .buttonStart = keystate[SDL_SCANCODE_RETURN],
+        .buttonSelect = keystate[SDL_SCANCODE_RSHIFT],
+        .dpadLeft = keystate[SDL_SCANCODE_LEFT],
+        .dpadRight = keystate[SDL_SCANCODE_RIGHT],
+        .dpadUp = keystate[SDL_SCANCODE_UP],
+        .dpadDown = keystate[SDL_SCANCODE_DOWN],
+    };
+    return inputState;
 }

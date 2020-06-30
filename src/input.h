@@ -4,12 +4,13 @@
 
 #include <stdbool.h>
 
-#include <SDL2/SDL.h>
-
 
 struct InputState
 {
+    // Emulator controls
     bool quit;
+
+    // GameBoy controls
     bool buttonA;
     bool buttonB;
     bool buttonStart;
@@ -22,7 +23,6 @@ struct InputState
 
 
 struct InputState input_get_state(void);
-
 
 
 #endif
