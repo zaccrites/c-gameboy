@@ -12,6 +12,8 @@ add_executable(emulator
     src/graphics.c
     src/cartridge.c
     src/memory.c
+    src/cpu.c
+    src/cpu_instructions.c
 )
 
 target_compile_options(emulator PRIVATE
@@ -19,9 +21,7 @@ target_compile_options(emulator PRIVATE
     -pedantic
     -Wall
     -Wextra
-    # -Werror
-    -Werror=return-type
-    -Werror=implicit-function-declaration
+    -Werror
     -O2
 )
 

@@ -1,7 +1,7 @@
 
 # c-gameboy
 
-A GameBoy emulator implemented in C
+A Nintendo GameBoy emulator implemented in C
 
 
 ## Development

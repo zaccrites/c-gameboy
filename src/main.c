@@ -6,6 +6,7 @@
 #include "graphics.h"
 #include "cartridge.h"
 #include "memory.h"
+#include "cpu.h"
 
 
 int main(int argc, char **argv)
@@ -46,6 +47,9 @@ int main(int argc, char **argv)
         goto cleanup_graphics;
     }
 
+    struct Cpu cpu;
+    cpu_init(&cpu, &memory);
+
     bool isRunning = true;
     while (isRunning)
     {
@@ -55,6 +59,8 @@ int main(int argc, char **argv)
             isRunning = false;
         }
 
+        // TODO
+        cpu_execute_next(&cpu);
         graphics_update(&graphics);
 
         // TODO: Measure elasped time and sleep to achieve 60 FPS.

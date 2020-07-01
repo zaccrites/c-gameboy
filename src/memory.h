@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "cartridge.h"
+
 
 // In cartridge, fixed
 #define MEMORY_ROM_BANK0_START     0x0000
@@ -65,10 +67,10 @@ struct Memory
 };
 
 
-uint8_t memory_read_byte(struct Memory *memory, uint16_t address);
-uint16_t memory_read_word(struct Memory *memory, uint16_t address);
-void memory_write_byte(struct Memory *memory, uint16_t address, uint8_t value);
-void memory_write_word(struct Memory *memory, uint16_t address, uint16_t value);
+uint8_t memory_read_word(struct Memory *memory, uint16_t address);
+uint16_t memory_read_dword(struct Memory *memory, uint16_t address);
+void memory_write_word(struct Memory *memory, uint16_t address, uint8_t value);
+void memory_write_dword(struct Memory *memory, uint16_t address, uint16_t value);
 
 bool memory_init(struct Memory *memory, struct Cartridge *cartridge);
 void memory_teardown(struct Memory* memory);
