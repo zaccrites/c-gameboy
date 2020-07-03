@@ -50,6 +50,7 @@ int main(int argc, char **argv)
     struct Cpu cpu;
     cpu_init(&cpu, &memory);
 
+    int cycles = 0;
     bool isRunning = true;
     while (isRunning)
     {
@@ -60,11 +61,21 @@ int main(int argc, char **argv)
         }
 
         // TODO
-        cpu_execute_next(&cpu);
-        graphics_update(&graphics);
+        if ( ! cpu_execute_next(&cpu))
+        {
+            isRunning = false;
+        }
+        cycles += 1;  // TODO: accurate number of cycles for each instruction
 
-        // TODO: Measure elasped time and sleep to achieve 60 FPS.
-        SDL_Delay(16);
+        if (cycles == 1000)
+        {
+            graphics_update(&graphics);
+            cycles = 0;
+
+            // TODO: Measure elasped time and sleep to achieve 60 FPS.
+            // SDL_Delay(16);
+        }
+
     }
 
 cleanup_graphics:

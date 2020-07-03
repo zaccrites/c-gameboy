@@ -19,10 +19,31 @@ add_executable(emulator
 target_compile_options(emulator PRIVATE
     -std=c11
     -pedantic
+    -O2
+    -fstrict-aliasing
+
     -Wall
     -Wextra
     -Werror
-    -O2
+
+    -Wbad-function-cast
+    -Wcast-align
+    -Wcast-qual
+    -Wfloat-equal
+    -Winline
+    -Wlogical-op
+    -Wnested-externs
+    -Wold-style-declaration
+    -Wold-style-definition
+    -Wpointer-arith
+    -Wredundant-decls
+    -Wshadow
+    -Wstrict-aliasing=2
+    -Wstrict-overflow=5
+    -Wstrict-prototypes
+    -Wswitch-default
+    -Wswitch-enum
+    -Wunreachable-code
 )
 
 target_link_libraries(emulator

@@ -1,6 +1,9 @@
 
 #include "graphics.h"
 
+// TODO: Extract SDL stuff from this file, or rename to "display.c"
+// Actual pixel processing should be done separately (in e.g. ppu.c)
+
 
 void graphics_update(struct Graphics* graphics)
 {

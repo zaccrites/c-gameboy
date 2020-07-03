@@ -51,13 +51,17 @@ struct Cpu
     uint16_t sp;
     struct CpuRegisters registers;
     struct CpuFlags flags;
+    bool ime;
+
+    uint8_t interruptFlags;
+    uint8_t interruptEnable;
 
     struct Memory *memory;
 };
 
 
 void cpu_init(struct Cpu *cpu, struct Memory *memory);
-void cpu_execute_next(struct Cpu *cpu);
+bool cpu_execute_next(struct Cpu *cpu);
 
 uint8_t cpu_read_reg(struct Cpu *cpu, enum CpuRegister reg);
 uint16_t cpu_read_double_reg(struct Cpu *cpu, enum CpuDoubleRegister reg);

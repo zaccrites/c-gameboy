@@ -3,10 +3,234 @@
 #include "cpu.h"
 
 
+static uint8_t read_mem_at_hl(struct Cpu *cpu)
+{
+    uint16_t address = cpu_read_double_reg(cpu, CPU_DOUBLE_REG_HL);
+    return memory_read_word(cpu->memory, address);
+}
+
+static void write_mem_at_hl(struct Cpu *cpu, uint8_t value)
+{
+    uint16_t address = cpu_read_double_reg(cpu, CPU_DOUBLE_REG_HL);
+    memory_write_word(cpu->memory, address, value);
+}
+
+
+static uint8_t imm_word(struct Cpu *cpu)
+{
+    return memory_read_word(cpu->memory, cpu->pc++);
+}
+
+static uint16_t imm_dword(struct Cpu *cpu)
+{
+    uint16_t value = memory_read_dword(cpu->memory, cpu->pc);
+    cpu->pc += 2;
+    return value;
+}
+
+
+static uint16_t modify_double_reg(struct Cpu *cpu, enum CpuDoubleRegister reg, uint16_t change)
+{
+    uint16_t value = cpu_read_double_reg(cpu, reg) + change;
+    cpu_write_double_reg(cpu, reg, value);
+    return value;
+}
+
+
+// #define INSTR(name)  static void name(struct Cpu *cpu)
+
+
+static void push_dword(struct Cpu *cpu, uint16_t value)
+{
+    memory_write_dword(cpu->memory, cpu->sp, value);
+    cpu->sp -= 2;
+}
+
+
+
 static void nop(struct Cpu *cpu)
 {
+    // Do nothing
     (void)cpu;
 }
+
+static void di(struct Cpu *cpu)
+{
+    // TODO: Wait to disable interrupts until the next instruction completes
+    cpu->ime = false;
+}
+
+static void ei(struct Cpu *cpu)
+{
+    // TODO: Wait to enable interrupts until the next instruction completes
+    cpu->ime = true;
+}
+
+
+static void jp_a16(struct Cpu *cpu)
+{
+    cpu->pc = imm_dword(cpu);
+}
+
+
+static void _jr(struct Cpu *cpu, bool condition)
+{
+    int8_t offset = imm_word(cpu);
+    if (condition)
+    {
+        cpu->pc += offset;
+    }
+}
+static void jr(struct Cpu *cpu) { _jr(cpu, true); }
+static void jr_z(struct Cpu *cpu) { _jr(cpu, cpu->flags.zero); }
+static void jr_nz(struct Cpu *cpu) { _jr(cpu, ! cpu->flags.zero); }
+static void jr_c(struct Cpu *cpu) { _jr(cpu, cpu->flags.carry); }
+static void jr_nc(struct Cpu *cpu) { _jr(cpu, ! cpu->flags.carry); }
+
+
+static void rst(struct Cpu* cpu, uint16_t address)
+{
+    push_dword(cpu, cpu->pc);
+    cpu->pc = address;
+}
+static void rst00(struct Cpu *cpu) { rst(cpu, 0x0000); }
+static void rst08(struct Cpu *cpu) { rst(cpu, 0x0008); }
+static void rst10(struct Cpu *cpu) { rst(cpu, 0x0010); }
+static void rst18(struct Cpu *cpu) { rst(cpu, 0x0018); }
+static void rst20(struct Cpu *cpu) { rst(cpu, 0x0020); }
+static void rst28(struct Cpu *cpu) { rst(cpu, 0x0028); }
+static void rst30(struct Cpu *cpu) { rst(cpu, 0x0030); }
+static void rst38(struct Cpu *cpu) { rst(cpu, 0x0038); }
+
+
+static void xor(struct Cpu *cpu, uint8_t value)
+{
+    cpu->registers.a ^= value;
+    cpu->flags.zero = cpu->registers.a == 0;
+    cpu->flags.negative = false;
+    cpu->flags.halfCarry = false;
+    cpu->flags.carry = false;
+}
+static void xor_a(struct Cpu *cpu) { xor(cpu, cpu->registers.a); }
+static void xor_b(struct Cpu *cpu) { xor(cpu, cpu->registers.b); }
+static void xor_c(struct Cpu *cpu) { xor(cpu, cpu->registers.c); }
+static void xor_d(struct Cpu *cpu) { xor(cpu, cpu->registers.d); }
+static void xor_e(struct Cpu *cpu) { xor(cpu, cpu->registers.e); }
+static void xor_h(struct Cpu *cpu) { xor(cpu, cpu->registers.h); }
+static void xor_l(struct Cpu *cpu) { xor(cpu, cpu->registers.l); }
+static void xor_hl(struct Cpu *cpu) { xor(cpu, read_mem_at_hl(cpu)); }
+
+
+static void ld_hl_d16(struct Cpu *cpu) { cpu_write_double_reg(cpu, CPU_DOUBLE_REG_HL, imm_dword(cpu)); }
+
+static void ld_a_d8(struct Cpu *cpu) { cpu->registers.a = imm_word(cpu); }
+static void ld_b_d8(struct Cpu *cpu) { cpu->registers.b = imm_word(cpu); }
+static void ld_c_d8(struct Cpu *cpu) { cpu->registers.c = imm_word(cpu); }
+static void ld_d_d8(struct Cpu *cpu) { cpu->registers.d = imm_word(cpu); }
+static void ld_e_d8(struct Cpu *cpu) { cpu->registers.e = imm_word(cpu); }
+static void ld_h_d8(struct Cpu *cpu) { cpu->registers.h = imm_word(cpu); }
+static void ld_l_d8(struct Cpu *cpu) { cpu->registers.l = imm_word(cpu); }
+static void ld_hl_d8(struct Cpu *cpu) { write_mem_at_hl(cpu, imm_word(cpu)); }
+
+static void ld_hlm_a(struct Cpu *cpu)
+{
+    write_mem_at_hl(cpu, cpu->registers.a);
+    modify_double_reg(cpu, CPU_DOUBLE_REG_HL, -1);
+}
+static void ld_hlp_a(struct Cpu *cpu)
+{
+    write_mem_at_hl(cpu, cpu->registers.a);
+    modify_double_reg(cpu, CPU_DOUBLE_REG_HL, +1);
+}
+static void ld_a_hlm(struct Cpu *cpu)
+{
+    cpu->registers.a = read_mem_at_hl(cpu);
+    modify_double_reg(cpu, CPU_DOUBLE_REG_HL, -1);
+}
+static void ld_a_hlp(struct Cpu *cpu)
+{
+    cpu->registers.a = read_mem_at_hl(cpu);
+    modify_double_reg(cpu, CPU_DOUBLE_REG_HL, +1);
+}
+
+
+static void ldh_a8_a(struct Cpu *cpu)
+{
+    uint16_t address = 0xff00 | imm_word(cpu);
+    memory_write_word(cpu->memory, address, cpu->registers.a);
+}
+
+static void ldh_a_a8(struct Cpu *cpu)
+{
+    uint16_t address = 0xff00 | imm_word(cpu);
+    cpu->registers.a = memory_read_word(cpu->memory, address);
+}
+
+
+static uint8_t dec(struct Cpu *cpu, uint8_t value)
+{
+    uint8_t newValue = value - 1;
+    cpu->flags.zero = newValue == 0;
+    cpu->flags.negative = true;
+    cpu->flags.halfCarry = (value & 0x0f) == 0x00;
+    // carry flag not affected
+    return newValue;
+}
+static void dec_a(struct Cpu *cpu) { cpu->registers.a = dec(cpu, cpu->registers.a); }
+static void dec_b(struct Cpu *cpu) { cpu->registers.b = dec(cpu, cpu->registers.b); }
+static void dec_c(struct Cpu *cpu) { cpu->registers.c = dec(cpu, cpu->registers.c); }
+static void dec_d(struct Cpu *cpu) { cpu->registers.d = dec(cpu, cpu->registers.d); }
+static void dec_e(struct Cpu *cpu) { cpu->registers.e = dec(cpu, cpu->registers.e); }
+static void dec_h(struct Cpu *cpu) { cpu->registers.h = dec(cpu, cpu->registers.h); }
+static void dec_l(struct Cpu *cpu) { cpu->registers.l = dec(cpu, cpu->registers.l); }
+static void dec_mem_hl(struct Cpu *cpu)
+{
+    uint8_t value = read_mem_at_hl(cpu);
+    value = dec(cpu, value);
+    write_mem_at_hl(cpu, value);
+}
+
+
+static uint8_t inc(struct Cpu *cpu, uint8_t value)
+{
+    uint8_t newValue = value + 1;
+    cpu->flags.zero = newValue == 0;
+    cpu->flags.negative = true;
+    cpu->flags.halfCarry = (value & 0x0f) == 0x0f;
+    // carry flag not affected
+    return newValue;
+}
+static void inc_a(struct Cpu *cpu) { cpu->registers.a = inc(cpu, cpu->registers.a); }
+static void inc_b(struct Cpu *cpu) { cpu->registers.b = inc(cpu, cpu->registers.b); }
+static void inc_c(struct Cpu *cpu) { cpu->registers.c = inc(cpu, cpu->registers.c); }
+static void inc_d(struct Cpu *cpu) { cpu->registers.d = inc(cpu, cpu->registers.d); }
+static void inc_e(struct Cpu *cpu) { cpu->registers.e = inc(cpu, cpu->registers.e); }
+static void inc_h(struct Cpu *cpu) { cpu->registers.h = inc(cpu, cpu->registers.h); }
+static void inc_l(struct Cpu *cpu) { cpu->registers.l = inc(cpu, cpu->registers.l); }
+static void inc_mem_hl(struct Cpu *cpu)
+{
+    uint8_t value = read_mem_at_hl(cpu);
+    value = inc(cpu, value);
+    write_mem_at_hl(cpu, value);
+}
+
+
+static void cp(struct Cpu *cpu, uint8_t value)
+{
+    cpu->flags.zero = cpu->registers.a == value;
+    cpu->flags.negative = true;
+    cpu->flags.halfCarry = (value & 0x0f) > (cpu->registers.a & 0x0f);
+    cpu->flags.carry = cpu->registers.a < value;
+}
+static void cp_a(struct Cpu *cpu) { cp(cpu, cpu->registers.a); }
+static void cp_b(struct Cpu *cpu) { cp(cpu, cpu->registers.b); }
+static void cp_c(struct Cpu *cpu) { cp(cpu, cpu->registers.c); }
+static void cp_d(struct Cpu *cpu) { cp(cpu, cpu->registers.d); }
+static void cp_e(struct Cpu *cpu) { cp(cpu, cpu->registers.e); }
+static void cp_h(struct Cpu *cpu) { cp(cpu, cpu->registers.h); }
+static void cp_l(struct Cpu *cpu) { cp(cpu, cpu->registers.l); }
+static void cp_mem_hl(struct Cpu *cpu) { cp(cpu, read_mem_at_hl(cpu)); }
+static void cp_d8(struct Cpu* cpu) { cp(cpu, imm_word(cpu)); }
 
 
 const struct Instruction instructions[256] = {
@@ -15,17 +239,17 @@ const struct Instruction instructions[256] = {
     { "LD BC, 0x%04x",   2, NULL },
     { "LD (BC), A",      0, NULL },
     { "INC BC",          0, NULL },
-    { "INC B",           0, NULL },
-    { "DEC B",           0, NULL },
-    { "LD B, 0x%02x",    1, NULL },
+    { "INC B",           0, inc_b },
+    { "DEC B",           0, dec_b },
+    { "LD B, 0x%02x",    1, ld_b_d8 },
     { "RLCA",            0, NULL },
     { "LD (0x%04x), SP", 2, NULL },
     { "ADD HL, BC",      0, NULL },
     { "LD A, (BC)",      0, NULL },
     { "DEC BC",          0, NULL },
-    { "INC C",           0, NULL },
-    { "DEC C",           0, NULL },
-    { "LD C, 0x%02x",    1, NULL },
+    { "INC C",           0, inc_c },
+    { "DEC C",           0, dec_c },
+    { "LD C, 0x%02x",    1, ld_c_d8 },
     { "RRCA",            0, NULL },
 
     // 0x10
@@ -33,53 +257,53 @@ const struct Instruction instructions[256] = {
     { "LD DE, 0x%04x",   2, NULL },
     { "LD (DE), A",      0, NULL },
     { "INC DE",          0, NULL },
-    { "INC D",           0, NULL },
-    { "DEC D",           0, NULL },
-    { "LD D, 0x%02x",    1, NULL },
+    { "INC D",           0, inc_d },
+    { "DEC D",           0, dec_d },
+    { "LD D, 0x%02x",    1, ld_d_d8 },
     { "RLA",             0, NULL },
-    { "JR %d",           1, NULL },
+    { "JR %hhd",         1, jr },
     { "ADD HL, DE",      0, NULL },
     { "LD A, (DE)",      0, NULL },
     { "DEC DE",          0, NULL },
-    { "INC E",           0, NULL },
-    { "DEC E",           0, NULL },
-    { "LD E, 0x%02x",    1, NULL },
+    { "INC E",           0, inc_e },
+    { "DEC E",           0, dec_e },
+    { "LD E, 0x%02x",    1, ld_e_d8 },
     { "RRA",             0, NULL },
 
     // 0x20
-    { "JR NZ, %d",       1, NULL },
-    { "LD HL, 0x%04x",   2, NULL },
-    { "LD (HL+), A",     0, NULL },
+    { "JR NZ, %hhd",     1, jr_nz },
+    { "LD HL, 0x%04x",   2, ld_hl_d16 },
+    { "LD (HL+), A",     0, ld_hlp_a },
     { "INC HL",          0, NULL },
-    { "INC H",           0, NULL },
-    { "DEC H",           0, NULL },
-    { "LD H, 0x%02x",    1, NULL },
+    { "INC H",           0, inc_h },
+    { "DEC H",           0, dec_h },
+    { "LD H, 0x%02x",    1, ld_h_d8 },
     { "DAA",             0, NULL },
-    { "JR Z, %d",        1, NULL },
+    { "JR Z, %hhd",      1, jr_z },
     { "ADD HL, HL",      0, NULL },
-    { "LD A, (HL+)",     0, NULL },
+    { "LD A, (HL+)",     0, ld_a_hlp },
     { "DEC HL",          0, NULL },
-    { "INC L",           0, NULL },
-    { "DEC L",           0, NULL },
-    { "LD L, 0x%02x",    1, NULL },
+    { "INC L",           0, inc_l },
+    { "DEC L",           0, dec_l },
+    { "LD L, 0x%02x",    1, ld_l_d8 },
     { "CPL",             0, NULL },
 
     // 0x30
-    { "JR NC, %d",       1, NULL },
+    { "JR NC, %hhd",     1, jr_nc },
     { "LD SP, 0x%04x",   2, NULL },
-    { "LD (HL-), A",     0, NULL },
+    { "LD (HL-), A",     0, ld_hlm_a },
     { "INC SP",          0, NULL },
-    { "INC (HL)",        0, NULL },
-    { "DEC (HL)",        0, NULL },
-    { "LD (HL), 0x%02x", 1, NULL },
+    { "INC (HL)",        0, inc_mem_hl },
+    { "DEC (HL)",        0, dec_mem_hl },
+    { "LD (HL), 0x%02x", 1, ld_hl_d8 },
     { "SCF",             0, NULL },
-    { "JR C, %d",        1, NULL },
+    { "JR C, %hhd",      1, jr_c },
     { "ADD HL, SP",      0, NULL },
-    { "LD A, (HL-)",     0, NULL },
+    { "LD A, (HL-)",     0, ld_a_hlm },
     { "DEC SP",          0, NULL },
-    { "INC A",           0, NULL },
-    { "DEC A",           0, NULL },
-    { "LD A, 0x%02x",    1, NULL },
+    { "INC A",           0, inc_a },
+    { "DEC A",           0, dec_a },
+    { "LD A, 0x%02x",    1, ld_a_d8 },
     { "CCF",             0, NULL },
 
     // 0x40
@@ -199,14 +423,14 @@ const struct Instruction instructions[256] = {
     { "AND L",           0, NULL },
     { "AND (HL)",        0, NULL },
     { "AND A",           0, NULL },
-    { "XOR B",           0, NULL },
-    { "XOR C",           0, NULL },
-    { "XOR D",           0, NULL },
-    { "XOR E",           0, NULL },
-    { "XOR H",           0, NULL },
-    { "XOR L",           0, NULL },
-    { "XOR (HL)",        0, NULL },
-    { "XOR A",           0, NULL },
+    { "XOR B",           0, xor_b },
+    { "XOR C",           0, xor_c },
+    { "XOR D",           0, xor_d },
+    { "XOR E",           0, xor_e },
+    { "XOR H",           0, xor_h },
+    { "XOR L",           0, xor_l },
+    { "XOR (HL)",        0, xor_hl },
+    { "XOR A",           0, xor_a },
 
     // 0xb0
     { "OR B",            0, NULL },
@@ -217,32 +441,32 @@ const struct Instruction instructions[256] = {
     { "OR L",            0, NULL },
     { "OR (HL)",         0, NULL },
     { "OR A",            0, NULL },
-    { "CP B",            0, NULL },
-    { "CP C",            0, NULL },
-    { "CP D",            0, NULL },
-    { "CP E",            0, NULL },
-    { "CP H",            0, NULL },
-    { "CP L",            0, NULL },
-    { "CP (HL)",         0, NULL },
-    { "CP A",            0, NULL },
+    { "CP B",            0, cp_b },
+    { "CP C",            0, cp_c },
+    { "CP D",            0, cp_d },
+    { "CP E",            0, cp_e },
+    { "CP H",            0, cp_h },
+    { "CP L",            0, cp_l },
+    { "CP (HL)",         0, cp_mem_hl },
+    { "CP A",            0, cp_a },
 
     // 0xc0
     { "RET NZ",          0, NULL },
     { "POP BC",          0, NULL },
     { "JP NZ, 0x%04x",   2, NULL },
-    { "JP 0x%04x",       2, NULL },
+    { "JP 0x%04x",       2, jp_a16 },
     { "CALL NZ, 0x%04x", 2, NULL },
     { "PUSH BC",         0, NULL },
     { "ADD A, 0x%02x",   1, NULL },
-    { "RST 0x00",        0, NULL },
+    { "RST 0x00",        0, rst00 },
     { "RET Z",           0, NULL },
     { "RET",             0, NULL },
     { "JP Z, 0x%04x",    2, NULL },
     { "<prefix cb>",     0, NULL },
-    { "CALL Z, 0x%04x",  0, NULL },
-    { "CALL 0x%04x",     0, NULL },
-    { "ADC A, 0x%02x",   0, NULL },
-    { "RST 0x08",        0, NULL },
+    { "CALL Z, 0x%04x",  2, NULL },
+    { "CALL 0x%04x",     2, NULL },
+    { "ADC A, 0x%02x",   1, NULL },
+    { "RST 0x08",        0, rst08 },
 
     // 0xd0
     { "RET NC",          0, NULL },
@@ -252,51 +476,51 @@ const struct Instruction instructions[256] = {
     { "CALL NC, 0x%04x", 2, NULL },
     { "PUSH DE",         0, NULL },
     { "SUB 0x%02x",      1, NULL },
-    { "RST 0x10",        0, NULL },
+    { "RST 0x10",        0, rst10 },
     { "RET C",           0, NULL },
     { "RETI",            0, NULL },
     { "JP C, 0x%04x",    2, NULL },
     { "<undocumented>",  0, NULL },
-    { "CALL C, 0x%04x",  0, NULL },
+    { "CALL C, 0x%04x",  2, NULL },
     { "<undocumented>",  0, NULL },
-    { "SBC A, 0x%02x",   0, NULL },
-    { "RST 0x18",        0, NULL },
+    { "SBC A, 0x%02x",   1, NULL },
+    { "RST 0x18",        0, rst18 },
 
     // 0xe0
-    { "LDH (0x%02x), A", 0, NULL },
+    { "LDH (0x%02x), A", 1, ldh_a8_a },
     { "POP HL",          0, NULL },
     { "LD (C), A",       0, NULL },
     { "<undocumented>",  0, NULL },
     { "<undocumented>",  0, NULL },
     { "PUSH HL",         0, NULL },
     { "AND 0x%02x",      1, NULL },
-    { "RST 0x20",        0, NULL },
-    { "ADD SP, %d",      1, NULL },
+    { "RST 0x20",        0, rst20 },
+    { "ADD SP, %hhd",    1, NULL },
     { "JP (HL)",         0, NULL },
     { "LD (0x%04x), A",  2, NULL },
     { "<undocumented>",  0, NULL },
     { "<undocumented>",  0, NULL },
     { "<undocumented>",  0, NULL },
-    { "XOR A, 0x%02x",   0, NULL },
-    { "RST 0x28",        0, NULL },
+    { "XOR A, 0x%02x",   1, NULL },
+    { "RST 0x28",        0, rst28 },
 
     // 0xf0
-    { "LDH A, (0x%02x)", 0, NULL },
+    { "LDH A, (0x%02x)", 1, ldh_a_a8 },
     { "POP AF",          0, NULL },
     { "LD A, (C)",       0, NULL },
-    { "DI",              0, NULL },
+    { "DI",              0, di },
     { "<undocumented>",  0, NULL },
     { "PUSH AF",         0, NULL },
     { "OR 0x%02x",       1, NULL },
-    { "RST 0x30",        0, NULL },
+    { "RST 0x30",        0, rst30 },
     { "LD HL, SP%+d",    1, NULL },
     { "LD SP, HL",       0, NULL },
     { "LD A, (0x%04x)",  2, NULL },
-    { "EI",              0, NULL },
+    { "EI",              0, ei },
     { "<undocumented>",  0, NULL },
     { "<undocumented>",  0, NULL },
-    { "CP A, 0x%02x",    0, NULL },
-    { "RST 0x38",        0, NULL },
+    { "CP A, 0x%02x",    1, cp_d8 },
+    { "RST 0x38",        0, rst38 },
 };
 
 

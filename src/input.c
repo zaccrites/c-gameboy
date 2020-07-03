@@ -23,6 +23,8 @@ struct InputState input_get_state(void)
             case SDLK_q:
                 quit = true;
                 break;
+            default:
+                break;
             }
         }
     }

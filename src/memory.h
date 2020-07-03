@@ -39,6 +39,9 @@
 #define MEMORY_OAM_START           0xfe00
 #define MEMORY_OAM_SIZE            160
 #define MEMORY_OAM_END             (MEMORY_OAM_START + MEMORY_OAM_SIZE - 1)
+// Unusable
+#define MEMORY_NOT_USABLE_START    0xfea0
+#define MEMORY_NOT_USABLE_END      0xfeff
 // I/O Ports
 #define MEMORY_IO_START            0xff00
 #define MEMORY_IO_SIZE             128
@@ -51,7 +54,18 @@
 #define MEMORY_INTERRUPT_ENABLE_REGISTER_ADDRESS  0xffff
 
 
-// TODO: Other mappers, with more RAM And ROM options
+// Allow other systems to register callback functions on read or write
+// of IO registers, along with the necessary context (e.g. a Cpu* or Ppu*).
+typedef void *IoRegisterFuncContext;
+typedef uint8_t (*IoRegisterReadFunc)(IoRegisterFuncContext);
+typedef void (*IoRegisterWriteFunc)(IoRegisterFuncContext, uint8_t);
+
+struct IoRegisterHandler
+{
+    IoRegisterReadFunc read;
+    IoRegisterWriteFunc write;
+    IoRegisterFuncContext context;
+};
 
 struct Memory
 {
@@ -64,6 +78,13 @@ struct Memory
     uint8_t oam[MEMORY_OAM_SIZE];
     uint8_t highRam[MEMORY_HIGH_RAM_SIZE];
     uint8_t interruptEnableRegister;
+
+    struct IoRegisterHandler ioRegisterHandlers[MEMORY_IO_SIZE];
+    struct IoRegisterHandler interruptEnableRegisterHandler;
+
+    // IoRegisterReadFunc ioRegisterReadFuncs[MEMORY_IO_SIZE];
+    // IoRegisterWriteFunc ioRegisterWriteFuncs[MEMORY_IO_SIZE];
+    // IoRegisterFuncContext ioRegisterFuncContexts[MEMORY_IO_SIZE];
 };
 
 
@@ -73,6 +94,7 @@ void memory_write_word(struct Memory *memory, uint16_t address, uint8_t value);
 void memory_write_dword(struct Memory *memory, uint16_t address, uint16_t value);
 
 bool memory_init(struct Memory *memory, struct Cartridge *cartridge);
-void memory_teardown(struct Memory* memory);
+void memory_teardown(struct Memory *memory);
+void memory_register_io_handler(struct Memory *memory, uint8_t reg, IoRegisterReadFunc readfunc, IoRegisterWriteFunc writefunc, IoRegisterFuncContext context);
 
 #endif
