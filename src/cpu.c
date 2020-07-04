@@ -94,66 +94,6 @@ void cpu_init(struct Cpu *cpu, struct Memory *memory)
 }
 
 
-uint8_t cpu_read_reg(struct Cpu *cpu, enum CpuRegister reg)
-{
-    switch (reg)
-    {
-    case CPU_REG_A:
-        return cpu->registers.a;
-    case CPU_REG_B:
-        return cpu->registers.b;
-    case CPU_REG_C:
-        return cpu->registers.c;
-    case CPU_REG_D:
-        return cpu->registers.d;
-    case CPU_REG_E:
-        return cpu->registers.e;
-    case CPU_REG_H:
-        return cpu->registers.h;
-    case CPU_REG_L:
-        return cpu->registers.l;
-    default:
-        assert(false);
-        return 0;
-    }
-}
-
-
-void cpu_write_reg(struct Cpu *cpu, enum CpuRegister reg, uint8_t value)
-{
-    switch (reg)
-    {
-    case CPU_REG_A:
-        cpu->registers.a = value;
-        break;
-    case CPU_REG_B:
-        cpu->registers.b = value;
-        break;
-    case CPU_REG_C:
-        cpu->registers.c = value;
-        break;
-    case CPU_REG_D:
-        cpu->registers.d = value;
-        break;
-    case CPU_REG_E:
-        cpu->registers.e = value;
-        break;
-    case CPU_REG_H:
-        cpu->registers.h = value;
-        break;
-    case CPU_REG_L:
-        cpu->registers.l = value;
-        break;
-    default:
-        assert(false);
-        break;
-    }
-}
-
-
-
-
-
 uint16_t cpu_read_double_reg(struct Cpu *cpu, enum CpuDoubleRegister reg)
 {
     uint16_t lowByte;
@@ -191,20 +131,20 @@ void cpu_write_double_reg(struct Cpu *cpu, enum CpuDoubleRegister reg, uint16_t 
     switch (reg)
     {
     case CPU_DOUBLE_REG_AF:
-        cpu_write_reg(cpu, CPU_REG_A, highByte);
+        cpu->registers.a = highByte;
         write_flags_byte(cpu, lowByte);
         break;
     case CPU_DOUBLE_REG_BC:
-        cpu_write_reg(cpu, CPU_REG_B, highByte);
-        cpu_write_reg(cpu, CPU_REG_C, lowByte);
+        cpu->registers.b = highByte;
+        cpu->registers.c = lowByte;
         break;
     case CPU_DOUBLE_REG_DE:
-        cpu_write_reg(cpu, CPU_REG_D, highByte);
-        cpu_write_reg(cpu, CPU_REG_E, lowByte);
+        cpu->registers.d = highByte;
+        cpu->registers.e = lowByte;
         break;
     case CPU_DOUBLE_REG_HL:
-        cpu_write_reg(cpu, CPU_REG_H, highByte);
-        cpu_write_reg(cpu, CPU_REG_L, lowByte);
+        cpu->registers.h = highByte;
+        cpu->registers.l = lowByte;
         break;
     default:
         assert(false);
