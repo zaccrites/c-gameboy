@@ -51,31 +51,48 @@ enum PpuMode ppu_get_mode(struct Ppu *ppu)
 
 #include <stdio.h>
 
+#define VRAM_TILE_DATA_INDEX            0
+#define VRAM_TILE_PATTERN_TABLE0_INDEX  VRAM_TILE_DATA_INDEX
+#define VRAM_TILE_PATTERN_TABLE1_INDEX  (VRAM_TILE_DATA_INDEX + 0x0800)
+
+#define VRAM_TILE_BACKGROUND_MAP0_INDEX 0x1800
+#define VRAM_TILE_BACKGROUND_MAP1_INDEX 0x1c00
+
+
 void ppu_render_vram(struct Ppu *ppu, uint8_t *buffer)
 {
-    // test VRAM rendering into a BGRA buffer of LCD size
-
-
-
-    for (size_t y = 0; y < LCD_HEIGHT; y++)
+    // TODO: Render line by line properly, not all at once.
+    for (uint8_t y0 = 0; y0 < LCD_HEIGHT; y0++)
     {
-        uint8_t byte0 = ppu->memory->vram[2 * (y % 8) + 0];
-        uint8_t byte1 = ppu->memory->vram[2 * (y % 8) + 1];
+        uint8_t y = y0 + ppu->scrollY;
+        size_t tileCoordY = y / 8;
+        size_t tilePixelCoordY = y % 8;
 
-        for (size_t x = 0; x < LCD_WIDTH; x++)
+        for (uint8_t x0 = 0; x0 < LCD_WIDTH; x0++)
         {
-            enum Color color = (enum Color)(
-                (
-                    ((byte0 & (1 << (x % 8))) << 1) |
-                    (byte1 & (1 << (x % 8)))
-                ) >> (x % 8)
-            );
+            uint8_t x = x0 + ppu->scrollX;
+            size_t tileCoordX = x / 8;
+            size_t tilePixelCoordX = x % 8;
 
+            size_t tileIndex = (tileCoordY * 32) + tileCoordX;
+            size_t tilePatternIndex = ppu->memory->vram[VRAM_TILE_BACKGROUND_MAP0_INDEX + tileIndex];  // TODO: other tile map
+            uint8_t *tilePixelData = &ppu->memory->vram[16 * tilePatternIndex];
+            uint8_t *tileLinePixelData = tilePixelData + 2 * tilePixelCoordY;
+            uint8_t tileByte0 = tileLinePixelData[0];
+            uint8_t tileByte1 = tileLinePixelData[1];
+
+            // TODO: convert raw number into *chosen pallete color*
+            enum Color pixelColor = (enum Color)(
+                (
+                    ((tileByte0 & (1 << (7 - tilePixelCoordX))) << 1) |
+                    (tileByte1 & (1 << (7 - tilePixelCoordX)))
+                ) >> (7 - tilePixelCoordX)
+            );
 
             uint8_t r;
             uint8_t g;
             uint8_t b;
-            switch (color)
+            switch (pixelColor)
             {
             case COLOR_LIGHTEST:
                 r = LCD_COLOR_LIGHTEST_R;
@@ -98,12 +115,11 @@ void ppu_render_vram(struct Ppu *ppu, uint8_t *buffer)
                 b = LCD_COLOR_DARKEST_B;
                 break;
             default:
-                printf("uh oh, color is 0x%x \n", color);
+                printf("uh oh, color is 0x%x \n", pixelColor);
                 assert(false);
             }
 
-
-            size_t i = y * LCD_WIDTH + x;
+            size_t i = y0 * LCD_WIDTH + x0;
             buffer[4 * i + 0] = b;
             buffer[4 * i + 1] = g;
             buffer[4 * i + 2] = r;
@@ -111,7 +127,6 @@ void ppu_render_vram(struct Ppu *ppu, uint8_t *buffer)
 
         }
     }
-
 }
 
 
