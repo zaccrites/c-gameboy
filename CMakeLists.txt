@@ -18,7 +18,7 @@ add_executable(emulator
 )
 
 target_compile_options(emulator PRIVATE
-    -std=c11
+    -std=c99
     -pedantic
     -O2
     -fstrict-aliasing
