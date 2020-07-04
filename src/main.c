@@ -98,6 +98,7 @@ int main(int argc, char **argv)
 
     int cycles = 0;
     bool isRunning = true;
+    uint8_t lastLY = 0;
     while (isRunning)
     {
 
@@ -123,18 +124,20 @@ int main(int argc, char **argv)
 
             keypad_tick(&keypad, &cpu);
 
-            bool isVblank = ppu_get_mode(&ppu) == PPU_MODE_VBLANK;
-            if (isVblank)
-            {
-                ppu_render_vram(&ppu, graphics.pixelBuffer);
-                graphics_update(&graphics);
-            }
-
             cycles = 0;
 
             // TODO: Measure elasped time and sleep to achieve 60 FPS.
             // SDL_Delay(16);
         }
+
+
+        // bool isVblank = ppu_get_mode(&ppu) == PPU_MODE_VBLANK;
+        if (lastLY != LCD_HEIGHT+2 && ppu.currentLine == LCD_HEIGHT+2)
+        {
+            ppu_render_vram(&ppu, graphics.pixelBuffer);
+            graphics_update(&graphics);
+        }
+        lastLY = ppu.currentLine;
 
     }
 
