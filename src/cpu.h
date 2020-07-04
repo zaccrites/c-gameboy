@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "Memory.h"
+struct Memory;
 
 
 enum CpuRegister {

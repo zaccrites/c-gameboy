@@ -6,12 +6,11 @@
 
 #include <SDL2/SDL.h>
 
+#include "lcd.h"
 
-#define SCREEN_WIDTH   160
-#define SCREEN_HEIGHT  144
 
-#define WINDOW_WIDTH   (SCREEN_WIDTH * 4)
-#define WINDOW_HEIGHT  (SCREEN_HEIGHT * 4)
+#define WINDOW_WIDTH   (LCD_WIDTH * 4)
+#define WINDOW_HEIGHT  (LCD_HEIGHT * 4)
 
 
 struct Graphics

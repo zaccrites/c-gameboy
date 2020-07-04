@@ -1,15 +1,12 @@
 
 #include "graphics.h"
 
-// TODO: Extract SDL stuff from this file, or rename to "display.c"
-// Actual pixel processing should be done separately (in e.g. ppu.c)
-
 
 void graphics_update(struct Graphics* graphics)
 {
     // TODO
 
-    unsigned char data[4 * SCREEN_WIDTH * SCREEN_HEIGHT];
+    unsigned char data[4 * LCD_WIDTH * LCD_HEIGHT];
     for (unsigned int i = 0; i < sizeof(data); i += 4)
     {
         data[i + 0] = 237;  // B
@@ -18,7 +15,7 @@ void graphics_update(struct Graphics* graphics)
         data[i + 3] = 255;  // A
     }
 
-    SDL_UpdateTexture(graphics->sdlCanvasTexture, NULL, data, 4 * SCREEN_WIDTH);
+    SDL_UpdateTexture(graphics->sdlCanvasTexture, NULL, data, 4 * LCD_WIDTH);
     SDL_RenderCopy(graphics->sdlRenderer, graphics->sdlCanvasTexture, NULL, NULL);
     SDL_RenderPresent(graphics->sdlRenderer);
 }
@@ -51,8 +48,8 @@ bool graphics_init(struct Graphics *graphics)
         graphics->sdlRenderer,
         SDL_PIXELFORMAT_ARGB8888,
         SDL_TEXTUREACCESS_STREAMING,
-        SCREEN_WIDTH,
-        SCREEN_HEIGHT
+        LCD_WIDTH,
+        LCD_HEIGHT
     );
     if (graphics->sdlCanvasTexture == NULL)
     {

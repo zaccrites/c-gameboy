@@ -14,6 +14,7 @@ add_executable(emulator
     src/memory.c
     src/cpu.c
     src/cpu_instructions.c
+    src/ppu.c
 )
 
 target_compile_options(emulator PRIVATE

@@ -45,17 +45,14 @@ uint8_t memory_read_word(struct Memory *memory, uint16_t address)
     {
         // Should never be used, but including this assertion just in case.
         // In the end this can be a NOP.
-        assert(false);
+        // assert(false);
+        // fprintf(stderr, "  Read from unusable address 0x%04x \n", address);
+        return 0x00;
     }
     else if (address <= MEMORY_IO_END)
     {
         struct IoRegisterHandler* handler = &memory->ioRegisterHandlers[address - MEMORY_IO_START];
-        if (handler->read == NULL)
-        {
-            fprintf(stderr, "Tried to access unhandled IO device at address 0x%04x \n", address);
-            assert(false);
-        }
-        return handler->read(handler->context);
+        return (handler->read == NULL) ? 0xff : handler->read(handler->context);
     }
     else if (address <= MEMORY_HIGH_RAM_END)
     {
@@ -110,17 +107,18 @@ void memory_write_word(struct Memory *memory, uint16_t address, uint8_t value)
     {
         // Should never be used, but including this assertion just in case.
         // In the end this can be a NOP.
-        assert(false);
+        // assert(false);
+        // fprintf(stderr, "  Wrote 0x%02x to unusable address 0x%04x \n", value, address);
+
+        // Do nothing
     }
     else if (address <= MEMORY_IO_END)
     {
         struct IoRegisterHandler *handler = &memory->ioRegisterHandlers[address - MEMORY_IO_START];
-        if (handler->write == NULL)
+        if (handler->write != NULL)
         {
-            fprintf(stderr, "Tried to access unhandled IO device at address 0x%04x \n", address);
-            assert(false);
+            handler->write(handler->context, value);
         }
-        handler->write(handler->context, value);
     }
     else if (address <= MEMORY_HIGH_RAM_END)
     {
@@ -148,7 +146,7 @@ uint16_t memory_read_dword(struct Memory *memory, uint16_t address)
 void memory_write_dword(struct Memory *memory, uint16_t address, uint16_t value)
 {
     uint8_t lowByte = value & 0xff;
-    uint8_t highByte = value << 8;
+    uint8_t highByte = value >> 8;
     memory_write_word(memory, address, (uint16_t)lowByte);
     memory_write_word(memory, address + 1, (uint16_t)highByte);
 }

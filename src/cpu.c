@@ -4,6 +4,7 @@
 
 #include "cpu.h"
 #include "cpu_instructions.h"
+#include "memory.h"
 
 
 static uint8_t read_flags_byte(struct Cpu *cpu)
@@ -233,8 +234,15 @@ void write_instruction_name_text(struct Cpu* cpu, const struct Instruction *inst
 
 void write_instruction_bytes_text(struct Cpu *cpu, const struct Instruction *instruction, char *buffer, size_t buflen)
 {
+    // TODO: Find a nicer solution
+    uint16_t byteCount = 1 + instruction->numImmediateBytes;
+    if (memory_read_word(cpu->memory, cpu->pc) == 0xcb)
+    {
+        byteCount += 1;
+    }
+
     size_t cursor = 0;
-    for (uint16_t i = 0; i <= instruction->numImmediateBytes; i++)
+    for (uint16_t i = 0; i < byteCount; i++)
     {
         uint8_t byte = memory_read_word(cpu->memory, cpu->pc + i);
         cursor += snprintf(buffer + cursor, buflen - cursor - 1, "%02x ", byte);
@@ -308,6 +316,12 @@ bool cpu_execute_next(struct Cpu *cpu)
     {
         // TODO: better way?
         instruction->impl(cpu);
+
+
+        if (cpu->pc == 0x0038) return false;
+
+
+
         return true;
     }
 }
