@@ -19,6 +19,15 @@ enum Color
 };
 
 
+enum PpuMode
+{
+    PPU_MODE_HBLANK = 0,
+    PPU_MODE_VBLANK = 1,
+    PPU_MODE_OAM_SEARCH = 2,
+    PPU_MODE_DRAWING = 3,
+};
+
+
 struct Ppu
 {
     int cycleCounter;
@@ -51,6 +60,8 @@ void ppu_init(struct Ppu *ppu, struct Memory *memory);
 
 void ppu_tick(struct Ppu *ppu, struct Cpu *cpu, int cycles);
 
+void ppu_render_vram(struct Ppu *ppu, uint8_t *buffer);
+enum PpuMode ppu_get_mode(struct Ppu *ppu);
 
 
 #endif

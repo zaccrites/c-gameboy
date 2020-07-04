@@ -4,18 +4,7 @@
 
 void graphics_update(struct Graphics* graphics)
 {
-    // TODO
-
-    unsigned char data[4 * LCD_WIDTH * LCD_HEIGHT];
-    for (unsigned int i = 0; i < sizeof(data); i += 4)
-    {
-        data[i + 0] = 237;  // B
-        data[i + 1] = 149;  // G
-        data[i + 2] = 100;  // R
-        data[i + 3] = 255;  // A
-    }
-
-    SDL_UpdateTexture(graphics->sdlCanvasTexture, NULL, data, 4 * LCD_WIDTH);
+    SDL_UpdateTexture(graphics->sdlCanvasTexture, NULL, graphics->pixelBuffer, 4 * LCD_WIDTH);
     SDL_RenderCopy(graphics->sdlRenderer, graphics->sdlCanvasTexture, NULL, NULL);
     SDL_RenderPresent(graphics->sdlRenderer);
 }
@@ -55,6 +44,15 @@ bool graphics_init(struct Graphics *graphics)
     {
         return false;
     }
+
+    for (unsigned int i = 0; i < sizeof(graphics->pixelBuffer); i += 4)
+    {
+        graphics->pixelBuffer[i + 0] = 237;  // B
+        graphics->pixelBuffer[i + 1] = 149;  // G
+        graphics->pixelBuffer[i + 2] = 100;  // R
+        graphics->pixelBuffer[i + 3] = 255;  // A
+    }
+    graphics_update(graphics);
 
     return true;
 }

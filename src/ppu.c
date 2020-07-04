@@ -1,4 +1,6 @@
 
+#include <assert.h>
+
 #include "ppu.h"
 #include "memory.h"
 #include "lcd.h"
@@ -33,25 +35,86 @@ struct Object
 
 
 
-// enum PpuMode
-// {
-//     PPU_MODE_HBLANK = 0,
-//     PPU_MODE_VBLANK = 1,
-//     PPU_MODE_OAM_SEARCH = 2,
-//     PPU_MODE_DRAWING = 3,
-// };
 
-// static enum PpuMode ppu_get_mode(struct Ppu *ppu)
-// {
-//     if (ppu->currentLine >= LCD_HEIGHT)
-//     {
-//         return PPU_MODE_VBLANK;
-//     }
 
-// }
+enum PpuMode ppu_get_mode(struct Ppu *ppu)
+{
+    if (ppu->currentLine >= LCD_HEIGHT)
+    {
+        return PPU_MODE_VBLANK;
+    }
 
+    // TODO
+    return PPU_MODE_DRAWING;
+
+}
 
 #include <stdio.h>
+
+void ppu_render_vram(struct Ppu *ppu, uint8_t *buffer)
+{
+    // test VRAM rendering into a BGRA buffer of LCD size
+
+
+
+    for (size_t y = 0; y < LCD_HEIGHT; y++)
+    {
+        uint8_t byte0 = ppu->memory->vram[2 * (y % 8) + 0];
+        uint8_t byte1 = ppu->memory->vram[2 * (y % 8) + 1];
+
+        for (size_t x = 0; x < LCD_WIDTH; x++)
+        {
+            enum Color color = (enum Color)(
+                (
+                    ((byte0 & (1 << (x % 8))) << 1) |
+                    (byte1 & (1 << (x % 8)))
+                ) >> (x % 8)
+            );
+
+
+            uint8_t r;
+            uint8_t g;
+            uint8_t b;
+            switch (color)
+            {
+            case COLOR_LIGHTEST:
+                r = LCD_COLOR_LIGHTEST_R;
+                g = LCD_COLOR_LIGHTEST_G;
+                b = LCD_COLOR_LIGHTEST_B;
+                break;
+            case COLOR_LIGHTER:
+                r = LCD_COLOR_LIGHTER_R;
+                g = LCD_COLOR_LIGHTER_G;
+                b = LCD_COLOR_LIGHTER_B;
+                break;
+            case COLOR_DARKER:
+                r = LCD_COLOR_DARKER_R;
+                g = LCD_COLOR_DARKER_G;
+                b = LCD_COLOR_DARKER_B;
+                break;
+            case COLOR_DARKEST:
+                r = LCD_COLOR_DARKEST_R;
+                g = LCD_COLOR_DARKEST_G;
+                b = LCD_COLOR_DARKEST_B;
+                break;
+            default:
+                printf("uh oh, color is 0x%x \n", color);
+                assert(false);
+            }
+
+
+            size_t i = y * LCD_WIDTH + x;
+            buffer[4 * i + 0] = b;
+            buffer[4 * i + 1] = g;
+            buffer[4 * i + 2] = r;
+            buffer[4 * i + 3] = 0xff;
+
+        }
+    }
+
+}
+
+
 
 
 void ppu_tick(struct Ppu *ppu, struct Cpu *cpu, int cycles)
@@ -71,7 +134,7 @@ void ppu_tick(struct Ppu *ppu, struct Cpu *cpu, int cycles)
         else if (ppu->currentLine > LCD_HEIGHT)
         {
             cpu_request_interrupt(cpu, INTERRUPT_VBLANK);
-            printf("VBLANK! \n");
+            // printf("VBLANK! \n");
         }
         ppu->cycleCounter = 0;
     }

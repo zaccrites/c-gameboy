@@ -123,7 +123,13 @@ int main(int argc, char **argv)
 
             keypad_tick(&keypad, &cpu);
 
-            graphics_update(&graphics);
+            bool isVblank = ppu_get_mode(&ppu) == PPU_MODE_VBLANK;
+            if (isVblank)
+            {
+                ppu_render_vram(&ppu, graphics.pixelBuffer);
+                graphics_update(&graphics);
+            }
+
             cycles = 0;
 
             // TODO: Measure elasped time and sleep to achieve 60 FPS.

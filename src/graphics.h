@@ -18,6 +18,7 @@ struct Graphics
     SDL_Window* sdlWindow;
     SDL_Renderer* sdlRenderer;
     SDL_Texture* sdlCanvasTexture;
+    uint8_t pixelBuffer[4 * LCD_WIDTH * LCD_HEIGHT];
 };
 
 
