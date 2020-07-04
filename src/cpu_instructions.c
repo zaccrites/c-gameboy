@@ -40,29 +40,15 @@ static uint16_t modify_double_reg(struct Cpu *cpu, enum CpuDoubleRegister reg, u
 }
 
 
-static void push_dword(struct Cpu *cpu, uint16_t value)
-{
-    memory_write_dword(cpu->memory, cpu->sp, value);
-    cpu->sp -= 2;
-}
+static void push_bc(struct Cpu *cpu) { cpu_push_dword(cpu, cpu_read_double_reg(cpu, CPU_DOUBLE_REG_BC)); }
+static void push_de(struct Cpu *cpu) { cpu_push_dword(cpu, cpu_read_double_reg(cpu, CPU_DOUBLE_REG_DE)); }
+static void push_hl(struct Cpu *cpu) { cpu_push_dword(cpu, cpu_read_double_reg(cpu, CPU_DOUBLE_REG_HL)); }
+static void push_af(struct Cpu *cpu) { cpu_push_dword(cpu, cpu_read_double_reg(cpu, CPU_DOUBLE_REG_AF)); }
 
-static uint16_t pop_dword(struct Cpu *cpu)
-{
-    cpu->sp += 2;
-    return memory_read_dword(cpu->memory, cpu->sp);
-}
-
-
-
-static void push_bc(struct Cpu *cpu) { push_dword(cpu, cpu_read_double_reg(cpu, CPU_DOUBLE_REG_BC)); }
-static void push_de(struct Cpu *cpu) { push_dword(cpu, cpu_read_double_reg(cpu, CPU_DOUBLE_REG_DE)); }
-static void push_hl(struct Cpu *cpu) { push_dword(cpu, cpu_read_double_reg(cpu, CPU_DOUBLE_REG_HL)); }
-static void push_af(struct Cpu *cpu) { push_dword(cpu, cpu_read_double_reg(cpu, CPU_DOUBLE_REG_AF)); }
-
-static void pop_bc(struct Cpu *cpu) { cpu_write_double_reg(cpu, CPU_DOUBLE_REG_BC, pop_dword(cpu)); }
-static void pop_de(struct Cpu *cpu) { cpu_write_double_reg(cpu, CPU_DOUBLE_REG_DE, pop_dword(cpu)); }
-static void pop_hl(struct Cpu *cpu) { cpu_write_double_reg(cpu, CPU_DOUBLE_REG_HL, pop_dword(cpu)); }
-static void pop_af(struct Cpu *cpu) { cpu_write_double_reg(cpu, CPU_DOUBLE_REG_AF, pop_dword(cpu)); }
+static void pop_bc(struct Cpu *cpu) { cpu_write_double_reg(cpu, CPU_DOUBLE_REG_BC, cpu_pop_dword(cpu)); }
+static void pop_de(struct Cpu *cpu) { cpu_write_double_reg(cpu, CPU_DOUBLE_REG_DE, cpu_pop_dword(cpu)); }
+static void pop_hl(struct Cpu *cpu) { cpu_write_double_reg(cpu, CPU_DOUBLE_REG_HL, cpu_pop_dword(cpu)); }
+static void pop_af(struct Cpu *cpu) { cpu_write_double_reg(cpu, CPU_DOUBLE_REG_AF, cpu_pop_dword(cpu)); }
 
 
 static void nop(struct Cpu *cpu)
@@ -122,7 +108,7 @@ static void jr_nc(struct Cpu *cpu) { _jr(cpu, ! cpu->flags.carry); }
 
 static void rst(struct Cpu* cpu, uint16_t address)
 {
-    push_dword(cpu, cpu->pc);
+    cpu_push_dword(cpu, cpu->pc);
     cpu->pc = address;
 }
 static void rst00(struct Cpu *cpu) { rst(cpu, 0x0000); }
@@ -319,7 +305,7 @@ static void cp_d8(struct Cpu* cpu) { cp(cpu, imm_word(cpu)); }
 static void call_a16(struct Cpu *cpu)
 {
     uint16_t address = imm_dword(cpu);
-    push_dword(cpu, cpu->pc);
+    cpu_push_dword(cpu, cpu->pc);
     cpu->pc = address;
 }
 
@@ -328,7 +314,7 @@ static void _ret(struct Cpu *cpu, bool condition)
 {
     if (condition)
     {
-        cpu->pc = pop_dword(cpu);
+        cpu->pc = cpu_pop_dword(cpu);
     }
 }
 static void ret(struct Cpu *cpu) { _ret(cpu, true); }
@@ -336,7 +322,7 @@ static void ret_z(struct Cpu *cpu) { _ret(cpu, cpu->flags.zero); }
 static void ret_nz(struct Cpu *cpu) { _ret(cpu, ! cpu->flags.zero); }
 static void ret_c(struct Cpu *cpu) { _ret(cpu, cpu->flags.carry); }
 static void ret_nc(struct Cpu *cpu) { _ret(cpu, ! cpu->flags.carry); }
-
+static void reti(struct Cpu *cpu) { ret(cpu); cpu->ime = true; }
 
 
 static void inc_bc(struct Cpu *cpu) { modify_double_reg(cpu, CPU_DOUBLE_REG_BC, +1); }
@@ -757,7 +743,7 @@ const struct Instruction instructions[256] = {
     { "SUB 0x%02x",      1, NULL },
     { "RST 0x10",        0, rst10 },
     { "RET C",           0, ret_c },
-    { "RETI",            0, NULL },
+    { "RETI",            0, reti },
     { "JP C, 0x%04x",    2, jp_c_a16 },
     { "<undocumented>",  0, NULL },
     { "CALL C, 0x%04x",  2, NULL },

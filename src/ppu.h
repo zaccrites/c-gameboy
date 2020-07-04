@@ -7,6 +7,7 @@
 
 
 struct Memory;
+struct Cpu;
 
 
 enum Color
@@ -48,7 +49,7 @@ struct Ppu
 
 void ppu_init(struct Ppu *ppu, struct Memory *memory);
 
-void ppu_tick(struct Ppu *ppu, int cycles);
+void ppu_tick(struct Ppu *ppu, struct Cpu *cpu, int cycles);
 
 
 

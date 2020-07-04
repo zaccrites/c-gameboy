@@ -8,6 +8,7 @@
 #include "memory.h"
 #include "cpu.h"
 #include "ppu.h"
+#include "keypad.h"
 
 
 // // TODO: Find a better place for this.
@@ -92,15 +93,14 @@ int main(int argc, char **argv)
     struct Cpu cpu;
     cpu_init(&cpu, &memory);
 
+    struct Keypad keypad;
+    keypad_init(&keypad, &memory);
+
     int cycles = 0;
     bool isRunning = true;
     while (isRunning)
     {
-        struct InputState inputState = input_get_state();
-        if (inputState.quit)
-        {
-            isRunning = false;
-        }
+
 
         // TODO
         if ( ! cpu_execute_next(&cpu))
@@ -109,10 +109,20 @@ int main(int argc, char **argv)
         }
         int instructionCycles = 1;  // TODO: accurate number of cycles for each instruction
         cycles += instructionCycles;
-        ppu_tick(&ppu, instructionCycles);
+        ppu_tick(&ppu, &cpu, instructionCycles);
 
-        if (cycles == 1000)
+
+        // TODO: Look for VBlank
+        if (cycles == 1000000/60)
         {
+            struct InputState inputState = input_get_state();
+            if (inputState.quit)
+            {
+                isRunning = false;
+            }
+
+            keypad_tick(&keypad, &cpu);
+
             graphics_update(&graphics);
             cycles = 0;
 

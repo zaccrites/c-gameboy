@@ -153,6 +153,19 @@ void cpu_write_double_reg(struct Cpu *cpu, enum CpuDoubleRegister reg, uint16_t 
 }
 
 
+void cpu_push_dword(struct Cpu *cpu, uint16_t value)
+{
+    memory_write_dword(cpu->memory, cpu->sp, value);
+    cpu->sp -= 2;
+}
+
+uint16_t cpu_pop_dword(struct Cpu *cpu)
+{
+    cpu->sp += 2;
+    return memory_read_dword(cpu->memory, cpu->sp);
+}
+
+
 void write_instruction_name_text(struct Cpu* cpu, const struct Instruction *instruction, char* buffer, size_t buflen)
 {
     switch (instruction->numImmediateBytes)
@@ -192,8 +205,52 @@ void write_instruction_bytes_text(struct Cpu *cpu, const struct Instruction *ins
 }
 
 
+void cpu_request_interrupt(struct Cpu *cpu, enum Interrupt interrupt)
+{
+    cpu->interruptFlags |= (1 << (uint8_t)interrupt);
+}
+
+
+
+
+
+static bool handle_interrupt(struct Cpu *cpu, enum Interrupt interrupt)
+{
+    cpu->interruptFlags &= ~(1 << (uint8_t)interrupt);
+    cpu->ime = false;
+    cpu_push_dword(cpu, cpu->pc);
+    cpu->pc = 0x0040 + 0x0008 * (uint16_t)interrupt;;
+    return true;
+}
+
+
 bool cpu_execute_next(struct Cpu *cpu)
 {
+    // TODO: Clean this up
+
+    if (cpu->ime)
+    {
+        const enum Interrupt interrupts[] =
+        {
+            INTERRUPT_VBLANK,
+            INTERRUPT_LCDC,
+            INTERRUPT_TIMER,
+            INTERRUPT_SERIAL,
+            INTERRUPT_KEYPAD,
+        };
+        for (size_t i = 0; i < sizeof(interrupts) / sizeof(interrupts[0]); i++)
+        {
+            enum Interrupt interrupt = interrupts[i];
+            bool interruptRequested = cpu->interruptFlags & (1 << (uint8_t)interrupt);
+            bool interruptEnabled = cpu->interruptEnable & (1 << (uint8_t)interrupt);
+            if (interruptRequested && interruptEnabled)
+            {
+                return handle_interrupt(cpu, interrupt);
+            }
+        }
+    }
+
+
     uint16_t pcStart = cpu->pc;
 
     const struct Instruction *instruction;
@@ -224,7 +281,7 @@ bool cpu_execute_next(struct Cpu *cpu)
     static bool tracing = false;
     // if (pcStart == 0x029c) tracing = true;
     // tracing = cpu->registers.c < 0x02;
-    tracing = true;
+    // tracing = true;
 
     if (tracing || isUnimplementedInstruction)
     {

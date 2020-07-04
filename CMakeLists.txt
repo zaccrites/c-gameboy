@@ -15,6 +15,7 @@ add_executable(emulator
     src/cpu.c
     src/cpu_instructions.c
     src/ppu.c
+    src/keypad.c
 )
 
 target_compile_options(emulator PRIVATE

@@ -2,6 +2,7 @@
 #include "ppu.h"
 #include "memory.h"
 #include "lcd.h"
+#include "cpu.h"
 
 
 #define MAX_OBJECTS_PER_LINE  10
@@ -50,7 +51,10 @@ struct Object
 // }
 
 
-void ppu_tick(struct Ppu *ppu, int cycles)
+#include <stdio.h>
+
+
+void ppu_tick(struct Ppu *ppu, struct Cpu *cpu, int cycles)
 {
     // Advance the line or pixel count, update VRAM/OAM lock state, etc.
     ppu->cycleCounter += cycles;
@@ -63,6 +67,11 @@ void ppu_tick(struct Ppu *ppu, int cycles)
         if (ppu->currentLine > 153)
         {
             ppu->currentLine = 0;
+        }
+        else if (ppu->currentLine > LCD_HEIGHT)
+        {
+            cpu_request_interrupt(cpu, INTERRUPT_VBLANK);
+            printf("VBLANK! \n");
         }
         ppu->cycleCounter = 0;
     }
