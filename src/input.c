@@ -34,8 +34,8 @@ struct InputState input_get_state(void)
     struct InputState inputState = {
         .quit = quit,
 
-        .buttonA = keystate[SDL_SCANCODE_Z],
-        .buttonB = keystate[SDL_SCANCODE_X],
+        .buttonA = keystate[SDL_SCANCODE_S],
+        .buttonB = keystate[SDL_SCANCODE_A],
         .buttonStart = keystate[SDL_SCANCODE_RETURN],
         .buttonSelect = keystate[SDL_SCANCODE_RSHIFT],
         .dpadLeft = keystate[SDL_SCANCODE_LEFT],
