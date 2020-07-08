@@ -23,7 +23,7 @@ static void io_handler_write_p1_register(IoRegisterFuncContext context, uint8_t 
 
 void keypad_init(struct Keypad *keypad, struct Memory *memory)
 {
-    keypad->p1 = 0x0f;
+    keypad->p1 = 0xcf;
     memory_register_io_handler(
         memory,
         IO_REGISTER_P1,
@@ -51,11 +51,11 @@ void keypad_tick(struct Keypad *keypad, struct Cpu *cpu)
     bool buttonStart = buttonsSelected && inputState.buttonStart;
 
     uint8_t outputBitsBefore = keypad->p1 & 0x0f;
-    keypad->p1 &= ~0x0f;
-    if (dpadRight || buttonA)      { keypad->p1 |= (1 << 0); }
-    if (dpadLeft  || buttonB)      { keypad->p1 |= (1 << 1); }
-    if (dpadUp    || buttonSelect) { keypad->p1 |= (1 << 2); }
-    if (dpadDown  || buttonStart)  { keypad->p1 |= (1 << 3); }
+    keypad->p1 |= 0x0f;
+    if (dpadRight || buttonA)      { keypad->p1 &= ~(1 << 0); }
+    if (dpadLeft  || buttonB)      { keypad->p1 &= ~(1 << 1); }
+    if (dpadUp    || buttonSelect) { keypad->p1 &= ~(1 << 2); }
+    if (dpadDown  || buttonStart)  { keypad->p1 &= ~(1 << 3); }
     uint8_t outputBitsAfter = keypad->p1 & 0x0f;
 
     uint8_t outputBitsHighToLow = outputBitsBefore & ~outputBitsAfter;
