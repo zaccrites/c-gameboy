@@ -192,7 +192,7 @@ static void ld_mem_de_a(struct Cpu *cpu)
 }
 static void ld_mem_a16_sp(struct Cpu *cpu)
 {
-    memory_write_dword(cpu->memory, imm_word(cpu), cpu->sp);
+    memory_write_dword(cpu->memory, imm_dword(cpu), cpu->sp);
 }
 
 static void ld_a_mem_bc(struct Cpu *cpu)
@@ -457,15 +457,56 @@ static void add(struct Cpu *cpu, uint8_t value)
     cpu->registers.a = newValue;
 }
 static void add_a(struct Cpu *cpu) { add(cpu, cpu->registers.a); }
-static void add_b(struct Cpu *cpu) { add(cpu, cpu->registers.a); }
-static void add_c(struct Cpu *cpu) { add(cpu, cpu->registers.a); }
-static void add_d(struct Cpu *cpu) { add(cpu, cpu->registers.a); }
-static void add_e(struct Cpu *cpu) { add(cpu, cpu->registers.a); }
-static void add_h(struct Cpu *cpu) { add(cpu, cpu->registers.a); }
-static void add_l(struct Cpu *cpu) { add(cpu, cpu->registers.a); }
+static void add_b(struct Cpu *cpu) { add(cpu, cpu->registers.b); }
+static void add_c(struct Cpu *cpu) { add(cpu, cpu->registers.c); }
+static void add_d(struct Cpu *cpu) { add(cpu, cpu->registers.d); }
+static void add_e(struct Cpu *cpu) { add(cpu, cpu->registers.e); }
+static void add_h(struct Cpu *cpu) { add(cpu, cpu->registers.h); }
+static void add_l(struct Cpu *cpu) { add(cpu, cpu->registers.l); }
 static void add_hl(struct Cpu *cpu) { add(cpu, read_mem_at_hl(cpu)); }
+static void add_d8(struct Cpu *cpu) { add(cpu, imm_word(cpu)); }
 
 
+static void adc(struct Cpu *cpu, uint8_t value)
+{
+    uint8_t newValue = cpu->registers.a + value + (cpu->flags.carry ? 1 : 0);
+    cpu->flags.zero = newValue == 0;
+    cpu->flags.negative = false;
+    cpu->flags.halfCarry = (((cpu->registers.a & 0x0f) + (value & 0x0f)) & 0x10) != 0;
+    cpu->flags.carry = 0xff - cpu->registers.a > value;
+    cpu->registers.a = newValue;
+}
+static void adc_a(struct Cpu *cpu) { adc(cpu, cpu->registers.a); }
+static void adc_b(struct Cpu *cpu) { adc(cpu, cpu->registers.b); }
+static void adc_c(struct Cpu *cpu) { adc(cpu, cpu->registers.c); }
+static void adc_d(struct Cpu *cpu) { adc(cpu, cpu->registers.d); }
+static void adc_e(struct Cpu *cpu) { adc(cpu, cpu->registers.e); }
+static void adc_h(struct Cpu *cpu) { adc(cpu, cpu->registers.h); }
+static void adc_l(struct Cpu *cpu) { adc(cpu, cpu->registers.l); }
+static void adc_hl(struct Cpu *cpu) { adc(cpu, read_mem_at_hl(cpu)); }
+static void adc_d8(struct Cpu *cpu) { adc(cpu, imm_word(cpu)); }
+
+
+
+
+static void sub(struct Cpu *cpu, uint8_t value)
+{
+    uint8_t newValue = cpu->registers.a - value;
+    cpu->flags.zero = newValue == 0;
+    cpu->flags.negative = false;
+    cpu->flags.halfCarry = (cpu->registers.a & 0x0f) < (value & 0x0f);
+    cpu->flags.carry = value > cpu->registers.a;
+    cpu->registers.a = newValue;
+}
+static void sub_a(struct Cpu *cpu) { sub(cpu, cpu->registers.a); }
+static void sub_b(struct Cpu *cpu) { sub(cpu, cpu->registers.b); }
+static void sub_c(struct Cpu *cpu) { sub(cpu, cpu->registers.c); }
+static void sub_d(struct Cpu *cpu) { sub(cpu, cpu->registers.d); }
+static void sub_e(struct Cpu *cpu) { sub(cpu, cpu->registers.e); }
+static void sub_h(struct Cpu *cpu) { sub(cpu, cpu->registers.h); }
+static void sub_l(struct Cpu *cpu) { sub(cpu, cpu->registers.l); }
+static void sub_hl(struct Cpu *cpu) { sub(cpu, read_mem_at_hl(cpu)); }
+static void sub_d8(struct Cpu *cpu) { sub(cpu, imm_word(cpu)); }
 
 
 
@@ -497,6 +538,279 @@ static void cpl(struct Cpu *cpu)
 }
 
 
+static void daa(struct Cpu *cpu)
+{
+    if ((cpu->registers.a & 0x0f) > 0x09 || cpu->flags.halfCarry)
+    {
+        cpu->registers.a += 0x06;
+    }
+
+    bool doSecondAddition = (cpu->registers.a & 0xf0) > 0x90 || cpu->flags.carry;
+    if (doSecondAddition)
+    {
+        cpu->registers.a += 0x60;
+    }
+
+    cpu->flags.zero = cpu->registers.a == 0;
+    // negative flag not affected
+    cpu->flags.halfCarry = false;
+    cpu->flags.carry = doSecondAddition;
+}
+
+
+
+
+
+static uint8_t swap(struct Cpu *cpu, uint8_t value)
+{
+    uint8_t upper = value >> 4;
+    uint8_t lower = value & 0x0f;
+    uint8_t newValue = (lower << 4) | upper;
+    cpu->flags.zero = newValue == 0;
+    cpu->flags.negative = false;
+    cpu->flags.halfCarry = false;
+    cpu->flags.carry = false;
+    return newValue;
+}
+static void swap_a(struct Cpu *cpu) { cpu->registers.a = swap(cpu, cpu->registers.a); }
+static void swap_b(struct Cpu *cpu) { cpu->registers.b = swap(cpu, cpu->registers.b); }
+static void swap_c(struct Cpu *cpu) { cpu->registers.c = swap(cpu, cpu->registers.c); }
+static void swap_d(struct Cpu *cpu) { cpu->registers.d = swap(cpu, cpu->registers.d); }
+static void swap_e(struct Cpu *cpu) { cpu->registers.e = swap(cpu, cpu->registers.e); }
+static void swap_h(struct Cpu *cpu) { cpu->registers.h = swap(cpu, cpu->registers.h); }
+static void swap_l(struct Cpu *cpu) { cpu->registers.l = swap(cpu, cpu->registers.l); }
+static void swap_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, swap(cpu, read_mem_at_hl(cpu))); }
+
+
+
+static void bit(struct Cpu *cpu, uint8_t bitnum, uint8_t value)
+{
+    cpu->flags.zero = (value & (1 << bitnum)) == 0;
+    cpu->flags.negative = false;
+    cpu->flags.halfCarry = false;
+    // carry flag not affected
+}
+static void bit_0_a(struct Cpu *cpu) { bit(cpu, 0, cpu->registers.a); }
+static void bit_0_b(struct Cpu *cpu) { bit(cpu, 0, cpu->registers.b); }
+static void bit_0_c(struct Cpu *cpu) { bit(cpu, 0, cpu->registers.c); }
+static void bit_0_d(struct Cpu *cpu) { bit(cpu, 0, cpu->registers.d); }
+static void bit_0_e(struct Cpu *cpu) { bit(cpu, 0, cpu->registers.e); }
+static void bit_0_h(struct Cpu *cpu) { bit(cpu, 0, cpu->registers.h); }
+static void bit_0_l(struct Cpu *cpu) { bit(cpu, 0, cpu->registers.l); }
+static void bit_0_mem_hl(struct Cpu *cpu) { bit(cpu, 0, read_mem_at_hl(cpu)); }
+//
+static void bit_1_a(struct Cpu *cpu) { bit(cpu, 1, cpu->registers.a); }
+static void bit_1_b(struct Cpu *cpu) { bit(cpu, 1, cpu->registers.b); }
+static void bit_1_c(struct Cpu *cpu) { bit(cpu, 1, cpu->registers.c); }
+static void bit_1_d(struct Cpu *cpu) { bit(cpu, 1, cpu->registers.d); }
+static void bit_1_e(struct Cpu *cpu) { bit(cpu, 1, cpu->registers.e); }
+static void bit_1_h(struct Cpu *cpu) { bit(cpu, 1, cpu->registers.h); }
+static void bit_1_l(struct Cpu *cpu) { bit(cpu, 1, cpu->registers.l); }
+static void bit_1_mem_hl(struct Cpu *cpu) { bit(cpu, 1, read_mem_at_hl(cpu)); }
+//
+static void bit_2_a(struct Cpu *cpu) { bit(cpu, 2, cpu->registers.a); }
+static void bit_2_b(struct Cpu *cpu) { bit(cpu, 2, cpu->registers.b); }
+static void bit_2_c(struct Cpu *cpu) { bit(cpu, 2, cpu->registers.c); }
+static void bit_2_d(struct Cpu *cpu) { bit(cpu, 2, cpu->registers.d); }
+static void bit_2_e(struct Cpu *cpu) { bit(cpu, 2, cpu->registers.e); }
+static void bit_2_h(struct Cpu *cpu) { bit(cpu, 2, cpu->registers.h); }
+static void bit_2_l(struct Cpu *cpu) { bit(cpu, 2, cpu->registers.l); }
+static void bit_2_mem_hl(struct Cpu *cpu) { bit(cpu, 2, read_mem_at_hl(cpu)); }
+//
+static void bit_3_a(struct Cpu *cpu) { bit(cpu, 3, cpu->registers.a); }
+static void bit_3_b(struct Cpu *cpu) { bit(cpu, 3, cpu->registers.b); }
+static void bit_3_c(struct Cpu *cpu) { bit(cpu, 3, cpu->registers.c); }
+static void bit_3_d(struct Cpu *cpu) { bit(cpu, 3, cpu->registers.d); }
+static void bit_3_e(struct Cpu *cpu) { bit(cpu, 3, cpu->registers.e); }
+static void bit_3_h(struct Cpu *cpu) { bit(cpu, 3, cpu->registers.h); }
+static void bit_3_l(struct Cpu *cpu) { bit(cpu, 3, cpu->registers.l); }
+static void bit_3_mem_hl(struct Cpu *cpu) { bit(cpu, 3, read_mem_at_hl(cpu)); }
+//
+static void bit_4_a(struct Cpu *cpu) { bit(cpu, 4, cpu->registers.a); }
+static void bit_4_b(struct Cpu *cpu) { bit(cpu, 4, cpu->registers.b); }
+static void bit_4_c(struct Cpu *cpu) { bit(cpu, 4, cpu->registers.c); }
+static void bit_4_d(struct Cpu *cpu) { bit(cpu, 4, cpu->registers.d); }
+static void bit_4_e(struct Cpu *cpu) { bit(cpu, 4, cpu->registers.e); }
+static void bit_4_h(struct Cpu *cpu) { bit(cpu, 4, cpu->registers.h); }
+static void bit_4_l(struct Cpu *cpu) { bit(cpu, 4, cpu->registers.l); }
+static void bit_4_mem_hl(struct Cpu *cpu) { bit(cpu, 4, read_mem_at_hl(cpu)); }
+//
+static void bit_5_a(struct Cpu *cpu) { bit(cpu, 5, cpu->registers.a); }
+static void bit_5_b(struct Cpu *cpu) { bit(cpu, 5, cpu->registers.b); }
+static void bit_5_c(struct Cpu *cpu) { bit(cpu, 5, cpu->registers.c); }
+static void bit_5_d(struct Cpu *cpu) { bit(cpu, 5, cpu->registers.d); }
+static void bit_5_e(struct Cpu *cpu) { bit(cpu, 5, cpu->registers.e); }
+static void bit_5_h(struct Cpu *cpu) { bit(cpu, 5, cpu->registers.h); }
+static void bit_5_l(struct Cpu *cpu) { bit(cpu, 5, cpu->registers.l); }
+static void bit_5_mem_hl(struct Cpu *cpu) { bit(cpu, 5, read_mem_at_hl(cpu)); }
+//
+static void bit_6_a(struct Cpu *cpu) { bit(cpu, 6, cpu->registers.a); }
+static void bit_6_b(struct Cpu *cpu) { bit(cpu, 6, cpu->registers.b); }
+static void bit_6_c(struct Cpu *cpu) { bit(cpu, 6, cpu->registers.c); }
+static void bit_6_d(struct Cpu *cpu) { bit(cpu, 6, cpu->registers.d); }
+static void bit_6_e(struct Cpu *cpu) { bit(cpu, 6, cpu->registers.e); }
+static void bit_6_h(struct Cpu *cpu) { bit(cpu, 6, cpu->registers.h); }
+static void bit_6_l(struct Cpu *cpu) { bit(cpu, 6, cpu->registers.l); }
+static void bit_6_mem_hl(struct Cpu *cpu) { bit(cpu, 6, read_mem_at_hl(cpu)); }
+//
+static void bit_7_a(struct Cpu *cpu) { bit(cpu, 7, cpu->registers.a); }
+static void bit_7_b(struct Cpu *cpu) { bit(cpu, 7, cpu->registers.b); }
+static void bit_7_c(struct Cpu *cpu) { bit(cpu, 7, cpu->registers.c); }
+static void bit_7_d(struct Cpu *cpu) { bit(cpu, 7, cpu->registers.d); }
+static void bit_7_e(struct Cpu *cpu) { bit(cpu, 7, cpu->registers.e); }
+static void bit_7_h(struct Cpu *cpu) { bit(cpu, 7, cpu->registers.h); }
+static void bit_7_l(struct Cpu *cpu) { bit(cpu, 7, cpu->registers.l); }
+static void bit_7_mem_hl(struct Cpu *cpu) { bit(cpu, 7, read_mem_at_hl(cpu)); }
+
+
+
+static uint8_t res(uint8_t bitnum, uint8_t value)
+{
+    return value & ~(1 << bitnum);
+}
+static void res_0_a(struct Cpu *cpu) { cpu->registers.a = res(0, cpu->registers.a); }
+static void res_0_b(struct Cpu *cpu) { cpu->registers.b = res(0, cpu->registers.b); }
+static void res_0_c(struct Cpu *cpu) { cpu->registers.c = res(0, cpu->registers.c); }
+static void res_0_d(struct Cpu *cpu) { cpu->registers.d = res(0, cpu->registers.d); }
+static void res_0_e(struct Cpu *cpu) { cpu->registers.e = res(0, cpu->registers.e); }
+static void res_0_h(struct Cpu *cpu) { cpu->registers.h = res(0, cpu->registers.h); }
+static void res_0_l(struct Cpu *cpu) { cpu->registers.l = res(0, cpu->registers.l); }
+static void res_0_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, res(0, read_mem_at_hl(cpu))); }
+//
+static void res_1_a(struct Cpu *cpu) { cpu->registers.a = res(1, cpu->registers.a); }
+static void res_1_b(struct Cpu *cpu) { cpu->registers.b = res(1, cpu->registers.b); }
+static void res_1_c(struct Cpu *cpu) { cpu->registers.c = res(1, cpu->registers.c); }
+static void res_1_d(struct Cpu *cpu) { cpu->registers.d = res(1, cpu->registers.d); }
+static void res_1_e(struct Cpu *cpu) { cpu->registers.e = res(1, cpu->registers.e); }
+static void res_1_h(struct Cpu *cpu) { cpu->registers.h = res(1, cpu->registers.h); }
+static void res_1_l(struct Cpu *cpu) { cpu->registers.l = res(1, cpu->registers.l); }
+static void res_1_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, res(1, read_mem_at_hl(cpu))); }
+//
+static void res_2_a(struct Cpu *cpu) { cpu->registers.a = res(2, cpu->registers.a); }
+static void res_2_b(struct Cpu *cpu) { cpu->registers.b = res(2, cpu->registers.b); }
+static void res_2_c(struct Cpu *cpu) { cpu->registers.c = res(2, cpu->registers.c); }
+static void res_2_d(struct Cpu *cpu) { cpu->registers.d = res(2, cpu->registers.d); }
+static void res_2_e(struct Cpu *cpu) { cpu->registers.e = res(2, cpu->registers.e); }
+static void res_2_h(struct Cpu *cpu) { cpu->registers.h = res(2, cpu->registers.h); }
+static void res_2_l(struct Cpu *cpu) { cpu->registers.l = res(2, cpu->registers.l); }
+static void res_2_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, res(2, read_mem_at_hl(cpu))); }
+//
+static void res_3_a(struct Cpu *cpu) { cpu->registers.a = res(3, cpu->registers.a); }
+static void res_3_b(struct Cpu *cpu) { cpu->registers.b = res(3, cpu->registers.b); }
+static void res_3_c(struct Cpu *cpu) { cpu->registers.c = res(3, cpu->registers.c); }
+static void res_3_d(struct Cpu *cpu) { cpu->registers.d = res(3, cpu->registers.d); }
+static void res_3_e(struct Cpu *cpu) { cpu->registers.e = res(3, cpu->registers.e); }
+static void res_3_h(struct Cpu *cpu) { cpu->registers.h = res(3, cpu->registers.h); }
+static void res_3_l(struct Cpu *cpu) { cpu->registers.l = res(3, cpu->registers.l); }
+static void res_3_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, res(3, read_mem_at_hl(cpu))); }
+//
+static void res_4_a(struct Cpu *cpu) { cpu->registers.a = res(4, cpu->registers.a); }
+static void res_4_b(struct Cpu *cpu) { cpu->registers.b = res(4, cpu->registers.b); }
+static void res_4_c(struct Cpu *cpu) { cpu->registers.c = res(4, cpu->registers.c); }
+static void res_4_d(struct Cpu *cpu) { cpu->registers.d = res(4, cpu->registers.d); }
+static void res_4_e(struct Cpu *cpu) { cpu->registers.e = res(4, cpu->registers.e); }
+static void res_4_h(struct Cpu *cpu) { cpu->registers.h = res(4, cpu->registers.h); }
+static void res_4_l(struct Cpu *cpu) { cpu->registers.l = res(4, cpu->registers.l); }
+static void res_4_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, res(4, read_mem_at_hl(cpu))); }
+//
+static void res_5_a(struct Cpu *cpu) { cpu->registers.a = res(5, cpu->registers.a); }
+static void res_5_b(struct Cpu *cpu) { cpu->registers.b = res(5, cpu->registers.b); }
+static void res_5_c(struct Cpu *cpu) { cpu->registers.c = res(5, cpu->registers.c); }
+static void res_5_d(struct Cpu *cpu) { cpu->registers.d = res(5, cpu->registers.d); }
+static void res_5_e(struct Cpu *cpu) { cpu->registers.e = res(5, cpu->registers.e); }
+static void res_5_h(struct Cpu *cpu) { cpu->registers.h = res(5, cpu->registers.h); }
+static void res_5_l(struct Cpu *cpu) { cpu->registers.l = res(5, cpu->registers.l); }
+static void res_5_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, res(5, read_mem_at_hl(cpu))); }
+//
+static void res_6_a(struct Cpu *cpu) { cpu->registers.a = res(6, cpu->registers.a); }
+static void res_6_b(struct Cpu *cpu) { cpu->registers.b = res(6, cpu->registers.b); }
+static void res_6_c(struct Cpu *cpu) { cpu->registers.c = res(6, cpu->registers.c); }
+static void res_6_d(struct Cpu *cpu) { cpu->registers.d = res(6, cpu->registers.d); }
+static void res_6_e(struct Cpu *cpu) { cpu->registers.e = res(6, cpu->registers.e); }
+static void res_6_h(struct Cpu *cpu) { cpu->registers.h = res(6, cpu->registers.h); }
+static void res_6_l(struct Cpu *cpu) { cpu->registers.l = res(6, cpu->registers.l); }
+static void res_6_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, res(6, read_mem_at_hl(cpu))); }
+//
+static void res_7_a(struct Cpu *cpu) { cpu->registers.a = res(7, cpu->registers.a); }
+static void res_7_b(struct Cpu *cpu) { cpu->registers.b = res(7, cpu->registers.b); }
+static void res_7_c(struct Cpu *cpu) { cpu->registers.c = res(7, cpu->registers.c); }
+static void res_7_d(struct Cpu *cpu) { cpu->registers.d = res(7, cpu->registers.d); }
+static void res_7_e(struct Cpu *cpu) { cpu->registers.e = res(7, cpu->registers.e); }
+static void res_7_h(struct Cpu *cpu) { cpu->registers.h = res(7, cpu->registers.h); }
+static void res_7_l(struct Cpu *cpu) { cpu->registers.l = res(7, cpu->registers.l); }
+static void res_7_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, res(7, read_mem_at_hl(cpu))); }
+
+
+static uint8_t sla(struct Cpu *cpu, uint8_t value)
+{
+    uint8_t newValue = value << 1;
+    cpu->flags.zero = newValue == 0;
+    cpu->flags.negative = false;
+    cpu->flags.halfCarry = false;
+    cpu->flags.carry = (value & 0x80) != 0;
+    return newValue;
+}
+static void sla_a(struct Cpu *cpu) { cpu->registers.a = sla(cpu, cpu->registers.a); }
+static void sla_b(struct Cpu *cpu) { cpu->registers.b = sla(cpu, cpu->registers.b); }
+static void sla_c(struct Cpu *cpu) { cpu->registers.c = sla(cpu, cpu->registers.c); }
+static void sla_d(struct Cpu *cpu) { cpu->registers.d = sla(cpu, cpu->registers.d); }
+static void sla_e(struct Cpu *cpu) { cpu->registers.e = sla(cpu, cpu->registers.e); }
+static void sla_h(struct Cpu *cpu) { cpu->registers.h = sla(cpu, cpu->registers.h); }
+static void sla_l(struct Cpu *cpu) { cpu->registers.l = sla(cpu, cpu->registers.l); }
+static void sla_mem_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, sla(cpu, read_mem_at_hl(cpu))); }
+
+
+static uint8_t srl(struct Cpu *cpu, uint8_t value)
+{
+    uint8_t newValue = value >> 1;
+    cpu->flags.zero = newValue == 0;
+    cpu->flags.negative = false;
+    cpu->flags.halfCarry = false;
+    cpu->flags.carry = (value & 0x01) != 0;
+    return newValue;
+}
+static void srl_a(struct Cpu *cpu) { cpu->registers.a = srl(cpu, cpu->registers.a); }
+static void srl_b(struct Cpu *cpu) { cpu->registers.b = srl(cpu, cpu->registers.b); }
+static void srl_c(struct Cpu *cpu) { cpu->registers.c = srl(cpu, cpu->registers.c); }
+static void srl_d(struct Cpu *cpu) { cpu->registers.d = srl(cpu, cpu->registers.d); }
+static void srl_e(struct Cpu *cpu) { cpu->registers.e = srl(cpu, cpu->registers.e); }
+static void srl_h(struct Cpu *cpu) { cpu->registers.h = srl(cpu, cpu->registers.h); }
+static void srl_l(struct Cpu *cpu) { cpu->registers.l = srl(cpu, cpu->registers.l); }
+static void srl_mem_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, srl(cpu, read_mem_at_hl(cpu))); }
+
+
+
+static uint8_t rlc(struct Cpu *cpu, uint8_t value)
+{
+    uint8_t newValue = (value << 1) | ((value & 0x80) ? 1 : 0);
+    cpu->flags.zero = newValue == 0;
+    cpu->flags.negative = false;
+    cpu->flags.halfCarry = false;
+    cpu->flags.carry = (value & 0x80) != 0;
+    return newValue;
+}
+static void rlc_a(struct Cpu *cpu) { cpu->registers.a = rlc(cpu, cpu->registers.a); }
+static void rlc_b(struct Cpu *cpu) { cpu->registers.b = rlc(cpu, cpu->registers.b); }
+static void rlc_c(struct Cpu *cpu) { cpu->registers.c = rlc(cpu, cpu->registers.c); }
+static void rlc_d(struct Cpu *cpu) { cpu->registers.d = rlc(cpu, cpu->registers.d); }
+static void rlc_e(struct Cpu *cpu) { cpu->registers.e = rlc(cpu, cpu->registers.e); }
+static void rlc_h(struct Cpu *cpu) { cpu->registers.h = rlc(cpu, cpu->registers.h); }
+static void rlc_l(struct Cpu *cpu) { cpu->registers.l = rlc(cpu, cpu->registers.l); }
+static void rlc_mem_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, rlc(cpu, read_mem_at_hl(cpu))); }
+
+// These non-CB versions are exactly like the CB versions except that the
+// zero flag is always cleared.
+static void rlca(struct Cpu *cpu)
+{
+    rlc_a(cpu);
+    cpu->flags.zero = false;
+}
+
+
+
+
+
+
 
 const struct Instruction instructions[256] = {
     // 0x00
@@ -507,7 +821,7 @@ const struct Instruction instructions[256] = {
     { "INC B",           0, inc_b },
     { "DEC B",           0, dec_b },
     { "LD B, 0x%02x",    1, ld_b_d8 },
-    { "RLCA",            0, NULL },
+    { "RLCA",            0, rlca },
     { "LD (0x%04x), SP", 2, ld_mem_a16_sp },
     { "ADD HL, BC",      0, add_hl_bc },
     { "LD A, (BC)",      0, ld_a_mem_bc },
@@ -543,7 +857,7 @@ const struct Instruction instructions[256] = {
     { "INC H",           0, inc_h },
     { "DEC H",           0, dec_h },
     { "LD H, 0x%02x",    1, ld_h_d8 },
-    { "DAA",             0, NULL },
+    { "DAA",             0, daa },
     { "JR Z, %hhd",      1, jr_z },
     { "ADD HL, HL",      0, add_hl_hl },
     { "LD A, (HL+)",     0, ld_a_mem_hlp },
@@ -652,24 +966,24 @@ const struct Instruction instructions[256] = {
     { "ADD A, L",        0, add_l },
     { "ADD A, (HL)",     0, add_hl },
     { "ADD A, A",        0, add_a },
-    { "ADC A, B",        0, NULL },
-    { "ADC A, C",        0, NULL },
-    { "ADC A, D",        0, NULL },
-    { "ADC A, E",        0, NULL },
-    { "ADC A, H",        0, NULL },
-    { "ADC A, L",        0, NULL },
-    { "ADC A, (HL)",     0, NULL },
-    { "ADC A, A",        0, NULL },
+    { "ADC A, B",        0, adc_b },
+    { "ADC A, C",        0, adc_c },
+    { "ADC A, D",        0, adc_d },
+    { "ADC A, E",        0, adc_e },
+    { "ADC A, H",        0, adc_h },
+    { "ADC A, L",        0, adc_l },
+    { "ADC A, (HL)",     0, adc_hl },
+    { "ADC A, A",        0, adc_a },
 
     // 0x90
-    { "SUB B",           0, NULL },
-    { "SUB C",           0, NULL },
-    { "SUB D",           0, NULL },
-    { "SUB E",           0, NULL },
-    { "SUB H",           0, NULL },
-    { "SUB L",           0, NULL },
-    { "SUB (HL)",        0, NULL },
-    { "SUB A",           0, NULL },
+    { "SUB B",           0, sub_b },
+    { "SUB C",           0, sub_c },
+    { "SUB D",           0, sub_d },
+    { "SUB E",           0, sub_e },
+    { "SUB H",           0, sub_h },
+    { "SUB L",           0, sub_l },
+    { "SUB (HL)",        0, sub_hl },
+    { "SUB A",           0, sub_a },
     { "SBC A, B",        0, NULL },
     { "SBC A, C",        0, NULL },
     { "SBC A, D",        0, NULL },
@@ -722,7 +1036,7 @@ const struct Instruction instructions[256] = {
     { "JP 0x%04x",       2, jp_a16 },
     { "CALL NZ, 0x%04x", 2, NULL },
     { "PUSH BC",         0, push_bc },
-    { "ADD A, 0x%02x",   1, NULL },
+    { "ADD A, 0x%02x",   1, add_d8 },
     { "RST 0x00",        0, rst00 },
     { "RET Z",           0, ret_z },
     { "RET",             0, ret },
@@ -730,7 +1044,7 @@ const struct Instruction instructions[256] = {
     { "<prefix cb>",     0, NULL },
     { "CALL Z, 0x%04x",  2, NULL },
     { "CALL 0x%04x",     2, call_a16 },
-    { "ADC A, 0x%02x",   1, NULL },
+    { "ADC A, 0x%02x",   1, adc_d8 },
     { "RST 0x08",        0, rst08 },
 
     // 0xd0
@@ -740,7 +1054,7 @@ const struct Instruction instructions[256] = {
     { "<undocumented>",  0, NULL },
     { "CALL NC, 0x%04x", 2, NULL },
     { "PUSH DE",         0, push_de },
-    { "SUB 0x%02x",      1, NULL },
+    { "SUB 0x%02x",      1, sub_d8 },
     { "RST 0x10",        0, rst10 },
     { "RET C",           0, ret_c },
     { "RETI",            0, reti },
@@ -795,114 +1109,21 @@ const struct Instruction instructions[256] = {
 
 
 
-static uint8_t swap(struct Cpu *cpu, uint8_t value)
-{
-    uint8_t upper = value >> 4;
-    uint8_t lower = value & 0x0f;
-    uint8_t newValue = (lower << 4) | upper;
-    cpu->flags.zero = newValue == 0;
-    cpu->flags.negative = false;
-    cpu->flags.halfCarry = false;
-    cpu->flags.carry = false;
-    return newValue;
-}
-static void swap_a(struct Cpu *cpu) { cpu->registers.a = swap(cpu, cpu->registers.a); }
-static void swap_b(struct Cpu *cpu) { cpu->registers.b = swap(cpu, cpu->registers.b); }
-static void swap_c(struct Cpu *cpu) { cpu->registers.c = swap(cpu, cpu->registers.c); }
-static void swap_d(struct Cpu *cpu) { cpu->registers.d = swap(cpu, cpu->registers.d); }
-static void swap_e(struct Cpu *cpu) { cpu->registers.e = swap(cpu, cpu->registers.e); }
-static void swap_h(struct Cpu *cpu) { cpu->registers.h = swap(cpu, cpu->registers.h); }
-static void swap_l(struct Cpu *cpu) { cpu->registers.l = swap(cpu, cpu->registers.l); }
-static void swap_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, swap(cpu, read_mem_at_hl(cpu))); }
 
 
-static uint8_t res(uint8_t bitnum, uint8_t value)
-{
-    return value & ~(1 << bitnum);
-}
-static void res_0_a(struct Cpu *cpu) { cpu->registers.a = res(0, cpu->registers.a); }
-static void res_0_b(struct Cpu *cpu) { cpu->registers.b = res(0, cpu->registers.b); }
-static void res_0_c(struct Cpu *cpu) { cpu->registers.c = res(0, cpu->registers.c); }
-static void res_0_d(struct Cpu *cpu) { cpu->registers.d = res(0, cpu->registers.d); }
-static void res_0_e(struct Cpu *cpu) { cpu->registers.e = res(0, cpu->registers.e); }
-static void res_0_h(struct Cpu *cpu) { cpu->registers.h = res(0, cpu->registers.h); }
-static void res_0_l(struct Cpu *cpu) { cpu->registers.l = res(0, cpu->registers.l); }
-static void res_0_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, res(0, read_mem_at_hl(cpu))); }
-//
-static void res_1_a(struct Cpu *cpu) { cpu->registers.a = res(1, cpu->registers.a); }
-static void res_1_b(struct Cpu *cpu) { cpu->registers.b = res(1, cpu->registers.b); }
-static void res_1_c(struct Cpu *cpu) { cpu->registers.c = res(1, cpu->registers.c); }
-static void res_1_d(struct Cpu *cpu) { cpu->registers.d = res(1, cpu->registers.d); }
-static void res_1_e(struct Cpu *cpu) { cpu->registers.e = res(1, cpu->registers.e); }
-static void res_1_h(struct Cpu *cpu) { cpu->registers.h = res(1, cpu->registers.h); }
-static void res_1_l(struct Cpu *cpu) { cpu->registers.l = res(1, cpu->registers.l); }
-static void res_1_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, res(1, read_mem_at_hl(cpu))); }
-//
-static void res_2_a(struct Cpu *cpu) { cpu->registers.a = res(2, cpu->registers.a); }
-static void res_2_b(struct Cpu *cpu) { cpu->registers.b = res(2, cpu->registers.b); }
-static void res_2_c(struct Cpu *cpu) { cpu->registers.c = res(2, cpu->registers.c); }
-static void res_2_d(struct Cpu *cpu) { cpu->registers.d = res(2, cpu->registers.d); }
-static void res_2_e(struct Cpu *cpu) { cpu->registers.e = res(2, cpu->registers.e); }
-static void res_2_h(struct Cpu *cpu) { cpu->registers.h = res(2, cpu->registers.h); }
-static void res_2_l(struct Cpu *cpu) { cpu->registers.l = res(2, cpu->registers.l); }
-static void res_2_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, res(2, read_mem_at_hl(cpu))); }
-//
-static void res_3_a(struct Cpu *cpu) { cpu->registers.a = res(3, cpu->registers.a); }
-static void res_3_b(struct Cpu *cpu) { cpu->registers.b = res(3, cpu->registers.b); }
-static void res_3_c(struct Cpu *cpu) { cpu->registers.c = res(3, cpu->registers.c); }
-static void res_3_d(struct Cpu *cpu) { cpu->registers.d = res(3, cpu->registers.d); }
-static void res_3_e(struct Cpu *cpu) { cpu->registers.e = res(3, cpu->registers.e); }
-static void res_3_h(struct Cpu *cpu) { cpu->registers.h = res(3, cpu->registers.h); }
-static void res_3_l(struct Cpu *cpu) { cpu->registers.l = res(3, cpu->registers.l); }
-static void res_3_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, res(3, read_mem_at_hl(cpu))); }
-//
-static void res_4_a(struct Cpu *cpu) { cpu->registers.a = res(4, cpu->registers.a); }
-static void res_4_b(struct Cpu *cpu) { cpu->registers.b = res(4, cpu->registers.b); }
-static void res_4_c(struct Cpu *cpu) { cpu->registers.c = res(4, cpu->registers.c); }
-static void res_4_d(struct Cpu *cpu) { cpu->registers.d = res(4, cpu->registers.d); }
-static void res_4_e(struct Cpu *cpu) { cpu->registers.e = res(4, cpu->registers.e); }
-static void res_4_h(struct Cpu *cpu) { cpu->registers.h = res(4, cpu->registers.h); }
-static void res_4_l(struct Cpu *cpu) { cpu->registers.l = res(4, cpu->registers.l); }
-static void res_4_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, res(4, read_mem_at_hl(cpu))); }
-//
-static void res_5_a(struct Cpu *cpu) { cpu->registers.a = res(5, cpu->registers.a); }
-static void res_5_b(struct Cpu *cpu) { cpu->registers.b = res(5, cpu->registers.b); }
-static void res_5_c(struct Cpu *cpu) { cpu->registers.c = res(5, cpu->registers.c); }
-static void res_5_d(struct Cpu *cpu) { cpu->registers.d = res(5, cpu->registers.d); }
-static void res_5_e(struct Cpu *cpu) { cpu->registers.e = res(5, cpu->registers.e); }
-static void res_5_h(struct Cpu *cpu) { cpu->registers.h = res(5, cpu->registers.h); }
-static void res_5_l(struct Cpu *cpu) { cpu->registers.l = res(5, cpu->registers.l); }
-static void res_5_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, res(5, read_mem_at_hl(cpu))); }
-//
-static void res_6_a(struct Cpu *cpu) { cpu->registers.a = res(6, cpu->registers.a); }
-static void res_6_b(struct Cpu *cpu) { cpu->registers.b = res(6, cpu->registers.b); }
-static void res_6_c(struct Cpu *cpu) { cpu->registers.c = res(6, cpu->registers.c); }
-static void res_6_d(struct Cpu *cpu) { cpu->registers.d = res(6, cpu->registers.d); }
-static void res_6_e(struct Cpu *cpu) { cpu->registers.e = res(6, cpu->registers.e); }
-static void res_6_h(struct Cpu *cpu) { cpu->registers.h = res(6, cpu->registers.h); }
-static void res_6_l(struct Cpu *cpu) { cpu->registers.l = res(6, cpu->registers.l); }
-static void res_6_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, res(6, read_mem_at_hl(cpu))); }
-//
-static void res_7_a(struct Cpu *cpu) { cpu->registers.a = res(7, cpu->registers.a); }
-static void res_7_b(struct Cpu *cpu) { cpu->registers.b = res(7, cpu->registers.b); }
-static void res_7_c(struct Cpu *cpu) { cpu->registers.c = res(7, cpu->registers.c); }
-static void res_7_d(struct Cpu *cpu) { cpu->registers.d = res(7, cpu->registers.d); }
-static void res_7_e(struct Cpu *cpu) { cpu->registers.e = res(7, cpu->registers.e); }
-static void res_7_h(struct Cpu *cpu) { cpu->registers.h = res(7, cpu->registers.h); }
-static void res_7_l(struct Cpu *cpu) { cpu->registers.l = res(7, cpu->registers.l); }
-static void res_7_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, res(7, read_mem_at_hl(cpu))); }
+
 
 
 const struct Instruction cbInstructions[256] = {
     // 0x00
-    { "RLC B",      0, NULL },
-    { "RLC C",      0, NULL },
-    { "RLC D",      0, NULL },
-    { "RLC E",      0, NULL },
-    { "RLC H",      0, NULL },
-    { "RLC L",      0, NULL },
-    { "RLC (HL)",   0, NULL },
-    { "RLC A",      0, NULL },
+    { "RLC B",      0, rlc_b },
+    { "RLC C",      0, rlc_c },
+    { "RLC D",      0, rlc_d },
+    { "RLC E",      0, rlc_e },
+    { "RLC H",      0, rlc_h },
+    { "RLC L",      0, rlc_l },
+    { "RLC (HL)",   0, rlc_mem_hl },
+    { "RLC A",      0, rlc_a },
     { "RRC B",      0, NULL },
     { "RRC C",      0, NULL },
     { "RRC D",      0, NULL },
@@ -931,14 +1152,14 @@ const struct Instruction cbInstructions[256] = {
     { "RR A",       0, NULL },
 
     // 0x20
-    { "SLA B",      0, NULL },
-    { "SLA C",      0, NULL },
-    { "SLA D",      0, NULL },
-    { "SLA E",      0, NULL },
-    { "SLA H",      0, NULL },
-    { "SLA L",      0, NULL },
-    { "SLA (HL)",   0, NULL },
-    { "SLA A",      0, NULL },
+    { "SLA B",      0, sla_b },
+    { "SLA C",      0, sla_c },
+    { "SLA D",      0, sla_d },
+    { "SLA E",      0, sla_e },
+    { "SLA H",      0, sla_h },
+    { "SLA L",      0, sla_l },
+    { "SLA (HL)",   0, sla_mem_hl },
+    { "SLA A",      0, sla_a },
     { "SRA B",      0, NULL },
     { "SRA C",      0, NULL },
     { "SRA D",      0, NULL },
@@ -957,86 +1178,86 @@ const struct Instruction cbInstructions[256] = {
     { "SWAP L",     0, swap_l },
     { "SWAP (HL)",  0, swap_hl },
     { "SWAP A",     0, swap_a },
-    { "SRL B",      0, NULL },
-    { "SRL C",      0, NULL },
-    { "SRL D",      0, NULL },
-    { "SRL E",      0, NULL },
-    { "SRL H",      0, NULL },
-    { "SRL L",      0, NULL },
-    { "SRL (HL)",   0, NULL },
-    { "SRL A",      0, NULL },
+    { "SRL B",      0, srl_b },
+    { "SRL C",      0, srl_c },
+    { "SRL D",      0, srl_d },
+    { "SRL E",      0, srl_e },
+    { "SRL H",      0, srl_h },
+    { "SRL L",      0, srl_l },
+    { "SRL (HL)",   0, srl_mem_hl },
+    { "SRL A",      0, srl_a },
 
     // 0x40
-    { "BIT 0 B",      0, NULL },
-    { "BIT 0 C",      0, NULL },
-    { "BIT 0 D",      0, NULL },
-    { "BIT 0 E",      0, NULL },
-    { "BIT 0 H",      0, NULL },
-    { "BIT 0 L",      0, NULL },
-    { "BIT 0 (HL)",   0, NULL },
-    { "BIT 0 A",      0, NULL },
-    { "BIT 1 B",      0, NULL },
-    { "BIT 1 C",      0, NULL },
-    { "BIT 1 D",      0, NULL },
-    { "BIT 1 E",      0, NULL },
-    { "BIT 1 H",      0, NULL },
-    { "BIT 1 L",      0, NULL },
-    { "BIT 1 (HL)",   0, NULL },
-    { "BIT 1 A",      0, NULL },
+    { "BIT 0 B",      0, bit_0_b },
+    { "BIT 0 C",      0, bit_0_c },
+    { "BIT 0 D",      0, bit_0_d },
+    { "BIT 0 E",      0, bit_0_e },
+    { "BIT 0 H",      0, bit_0_h },
+    { "BIT 0 L",      0, bit_0_l },
+    { "BIT 0 (HL)",   0, bit_0_mem_hl },
+    { "BIT 0 A",      0, bit_0_a },
+    { "BIT 1 B",      0, bit_1_b },
+    { "BIT 1 C",      0, bit_1_c },
+    { "BIT 1 D",      0, bit_1_d },
+    { "BIT 1 E",      0, bit_1_e },
+    { "BIT 1 H",      0, bit_1_h },
+    { "BIT 1 L",      0, bit_1_l },
+    { "BIT 1 (HL)",   0, bit_1_mem_hl },
+    { "BIT 1 A",      0, bit_1_a },
 
     // 0x50
-    { "BIT 2 B",      0, NULL },
-    { "BIT 2 C",      0, NULL },
-    { "BIT 2 D",      0, NULL },
-    { "BIT 2 E",      0, NULL },
-    { "BIT 2 H",      0, NULL },
-    { "BIT 2 L",      0, NULL },
-    { "BIT 2 (HL)",   0, NULL },
-    { "BIT 2 A",      0, NULL },
-    { "BIT 3 B",      0, NULL },
-    { "BIT 3 C",      0, NULL },
-    { "BIT 3 D",      0, NULL },
-    { "BIT 3 E",      0, NULL },
-    { "BIT 3 H",      0, NULL },
-    { "BIT 3 L",      0, NULL },
-    { "BIT 3 (HL)",   0, NULL },
-    { "BIT 3 A",      0, NULL },
+    { "BIT 2 B",      0, bit_2_b },
+    { "BIT 2 C",      0, bit_2_c },
+    { "BIT 2 D",      0, bit_2_d },
+    { "BIT 2 E",      0, bit_2_e },
+    { "BIT 2 H",      0, bit_2_h },
+    { "BIT 2 L",      0, bit_2_l },
+    { "BIT 2 (HL)",   0, bit_2_mem_hl },
+    { "BIT 2 A",      0, bit_2_a },
+    { "BIT 3 B",      0, bit_3_b },
+    { "BIT 3 C",      0, bit_3_c },
+    { "BIT 3 D",      0, bit_3_d },
+    { "BIT 3 E",      0, bit_3_e },
+    { "BIT 3 H",      0, bit_3_h },
+    { "BIT 3 L",      0, bit_3_l },
+    { "BIT 3 (HL)",   0, bit_3_mem_hl },
+    { "BIT 3 A",      0, bit_3_a },
 
     // 0x60
-    { "BIT 4 B",      0, NULL },
-    { "BIT 4 C",      0, NULL },
-    { "BIT 4 D",      0, NULL },
-    { "BIT 4 E",      0, NULL },
-    { "BIT 4 H",      0, NULL },
-    { "BIT 4 L",      0, NULL },
-    { "BIT 4 (HL)",   0, NULL },
-    { "BIT 4 A",      0, NULL },
-    { "BIT 5 B",      0, NULL },
-    { "BIT 5 C",      0, NULL },
-    { "BIT 5 D",      0, NULL },
-    { "BIT 5 E",      0, NULL },
-    { "BIT 5 H",      0, NULL },
-    { "BIT 5 L",      0, NULL },
-    { "BIT 5 (HL)",   0, NULL },
-    { "BIT 5 A",      0, NULL },
+    { "BIT 4 B",      0, bit_4_b },
+    { "BIT 4 C",      0, bit_4_c },
+    { "BIT 4 D",      0, bit_4_d },
+    { "BIT 4 E",      0, bit_4_e },
+    { "BIT 4 H",      0, bit_4_h },
+    { "BIT 4 L",      0, bit_4_l },
+    { "BIT 4 (HL)",   0, bit_4_mem_hl },
+    { "BIT 4 A",      0, bit_4_a },
+    { "BIT 5 B",      0, bit_5_b },
+    { "BIT 5 C",      0, bit_5_c },
+    { "BIT 5 D",      0, bit_5_d },
+    { "BIT 5 E",      0, bit_5_e },
+    { "BIT 5 H",      0, bit_5_h },
+    { "BIT 5 L",      0, bit_5_l },
+    { "BIT 5 (HL)",   0, bit_5_mem_hl },
+    { "BIT 5 A",      0, bit_5_a },
 
     // 0x70
-    { "BIT 6 B",      0, NULL },
-    { "BIT 6 C",      0, NULL },
-    { "BIT 6 D",      0, NULL },
-    { "BIT 6 E",      0, NULL },
-    { "BIT 6 H",      0, NULL },
-    { "BIT 6 L",      0, NULL },
-    { "BIT 6 (HL)",   0, NULL },
-    { "BIT 6 A",      0, NULL },
-    { "BIT 7 B",      0, NULL },
-    { "BIT 7 C",      0, NULL },
-    { "BIT 7 D",      0, NULL },
-    { "BIT 7 E",      0, NULL },
-    { "BIT 7 H",      0, NULL },
-    { "BIT 7 L",      0, NULL },
-    { "BIT 7 (HL)",   0, NULL },
-    { "BIT 7 A",      0, NULL },
+    { "BIT 6 B",      0, bit_6_b },
+    { "BIT 6 C",      0, bit_6_c },
+    { "BIT 6 D",      0, bit_6_d },
+    { "BIT 6 E",      0, bit_6_e },
+    { "BIT 6 H",      0, bit_6_h },
+    { "BIT 6 L",      0, bit_6_l },
+    { "BIT 6 (HL)",   0, bit_6_mem_hl },
+    { "BIT 6 A",      0, bit_6_a },
+    { "BIT 7 B",      0, bit_7_b },
+    { "BIT 7 C",      0, bit_7_c },
+    { "BIT 7 D",      0, bit_7_d },
+    { "BIT 7 E",      0, bit_7_e },
+    { "BIT 7 H",      0, bit_7_h },
+    { "BIT 7 L",      0, bit_7_l },
+    { "BIT 7 (HL)",   0, bit_7_mem_hl },
+    { "BIT 7 A",      0, bit_7_a },
 
     // 0x80
     { "RES 0 B",      0, res_0_b },
