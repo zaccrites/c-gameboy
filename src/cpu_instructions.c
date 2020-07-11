@@ -121,24 +121,6 @@ static void rst30(struct Cpu *cpu) { rst(cpu, 0x0030); }
 static void rst38(struct Cpu *cpu) { rst(cpu, 0x0038); }
 
 
-static void xor(struct Cpu *cpu, uint8_t value)
-{
-    cpu->registers.a ^= value;
-    cpu->flags.zero = cpu->registers.a == 0;
-    cpu->flags.negative = false;
-    cpu->flags.halfCarry = false;
-    cpu->flags.carry = false;
-}
-static void xor_a(struct Cpu *cpu) { xor(cpu, cpu->registers.a); }
-static void xor_b(struct Cpu *cpu) { xor(cpu, cpu->registers.b); }
-static void xor_c(struct Cpu *cpu) { xor(cpu, cpu->registers.c); }
-static void xor_d(struct Cpu *cpu) { xor(cpu, cpu->registers.d); }
-static void xor_e(struct Cpu *cpu) { xor(cpu, cpu->registers.e); }
-static void xor_h(struct Cpu *cpu) { xor(cpu, cpu->registers.h); }
-static void xor_l(struct Cpu *cpu) { xor(cpu, cpu->registers.l); }
-static void xor_hl(struct Cpu *cpu) { xor(cpu, read_mem_at_hl(cpu)); }
-
-
 static void ld_mem_a16_a(struct Cpu *cpu)
 {
     uint16_t address = imm_dword(cpu);
@@ -263,7 +245,7 @@ static uint8_t inc(struct Cpu *cpu, uint8_t value)
 {
     uint8_t newValue = value + 1;
     cpu->flags.zero = newValue == 0;
-    cpu->flags.negative = true;
+    cpu->flags.negative = false;
     cpu->flags.halfCarry = (value & 0x0f) == 0x0f;
     // carry flag not affected
     return newValue;
@@ -302,12 +284,20 @@ static void cp_d8(struct Cpu* cpu) { cp(cpu, imm_word(cpu)); }
 
 
 
-static void call_a16(struct Cpu *cpu)
+static void _call_a16(struct Cpu *cpu, bool condition)
 {
     uint16_t address = imm_dword(cpu);
-    cpu_push_dword(cpu, cpu->pc);
-    cpu->pc = address;
+    if (condition)
+    {
+        cpu_push_dword(cpu, cpu->pc);
+        cpu->pc = address;
+    }
 }
+static void call_a16(struct Cpu *cpu) { _call_a16(cpu, true); }
+static void call_z_a16(struct Cpu *cpu) { _call_a16(cpu, cpu->flags.zero); }
+static void call_nz_a16(struct Cpu *cpu) { _call_a16(cpu, ! cpu->flags.zero); }
+static void call_c_a16(struct Cpu *cpu) { _call_a16(cpu, cpu->flags.carry); }
+static void call_nc_a16(struct Cpu *cpu) { _call_a16(cpu, ! cpu->flags.carry); }
 
 
 static void _ret(struct Cpu *cpu, bool condition)
@@ -447,13 +437,32 @@ static void or_hl(struct Cpu *cpu) { or(cpu, read_mem_at_hl(cpu)); }
 static void or_d8(struct Cpu *cpu) { or(cpu, imm_word(cpu)); }
 
 
+static void xor(struct Cpu *cpu, uint8_t value)
+{
+    cpu->registers.a ^= value;
+    cpu->flags.zero = cpu->registers.a == 0;
+    cpu->flags.negative = false;
+    cpu->flags.halfCarry = false;
+    cpu->flags.carry = false;
+}
+static void xor_a(struct Cpu *cpu) { xor(cpu, cpu->registers.a); }
+static void xor_b(struct Cpu *cpu) { xor(cpu, cpu->registers.b); }
+static void xor_c(struct Cpu *cpu) { xor(cpu, cpu->registers.c); }
+static void xor_d(struct Cpu *cpu) { xor(cpu, cpu->registers.d); }
+static void xor_e(struct Cpu *cpu) { xor(cpu, cpu->registers.e); }
+static void xor_h(struct Cpu *cpu) { xor(cpu, cpu->registers.h); }
+static void xor_l(struct Cpu *cpu) { xor(cpu, cpu->registers.l); }
+static void xor_hl(struct Cpu *cpu) { xor(cpu, read_mem_at_hl(cpu)); }
+static void xor_d8(struct Cpu *cpu) { xor(cpu, imm_word(cpu)); }
+
+
 static void add(struct Cpu *cpu, uint8_t value)
 {
     uint8_t newValue = cpu->registers.a + value;
     cpu->flags.zero = newValue == 0;
     cpu->flags.negative = false;
     cpu->flags.halfCarry = (((cpu->registers.a & 0x0f) + (value & 0x0f)) & 0x10) != 0;
-    cpu->flags.carry = 0xff - cpu->registers.a > value;
+    cpu->flags.carry = 0xff - cpu->registers.a < value;
     cpu->registers.a = newValue;
 }
 static void add_a(struct Cpu *cpu) { add(cpu, cpu->registers.a); }
@@ -469,11 +478,13 @@ static void add_d8(struct Cpu *cpu) { add(cpu, imm_word(cpu)); }
 
 static void adc(struct Cpu *cpu, uint8_t value)
 {
-    uint8_t newValue = cpu->registers.a + value + (cpu->flags.carry ? 1 : 0);
+    uint16_t carry = cpu->flags.carry ? 1 : 0;
+    uint16_t result = cpu->registers.a + value + carry;
+    uint8_t newValue = result & 0x00ff;
     cpu->flags.zero = newValue == 0;
     cpu->flags.negative = false;
-    cpu->flags.halfCarry = (((cpu->registers.a & 0x0f) + (value & 0x0f)) & 0x10) != 0;
-    cpu->flags.carry = 0xff - cpu->registers.a > value;
+    cpu->flags.halfCarry = ((cpu->registers.a & 0x0f) + (value & 0x0f) + carry) > 0x0f;
+    cpu->flags.carry = result > 0x00ff;
     cpu->registers.a = newValue;
 }
 static void adc_a(struct Cpu *cpu) { adc(cpu, cpu->registers.a); }
@@ -487,13 +498,11 @@ static void adc_hl(struct Cpu *cpu) { adc(cpu, read_mem_at_hl(cpu)); }
 static void adc_d8(struct Cpu *cpu) { adc(cpu, imm_word(cpu)); }
 
 
-
-
 static void sub(struct Cpu *cpu, uint8_t value)
 {
     uint8_t newValue = cpu->registers.a - value;
     cpu->flags.zero = newValue == 0;
-    cpu->flags.negative = false;
+    cpu->flags.negative = true;
     cpu->flags.halfCarry = (cpu->registers.a & 0x0f) < (value & 0x0f);
     cpu->flags.carry = value > cpu->registers.a;
     cpu->registers.a = newValue;
@@ -508,6 +517,27 @@ static void sub_l(struct Cpu *cpu) { sub(cpu, cpu->registers.l); }
 static void sub_hl(struct Cpu *cpu) { sub(cpu, read_mem_at_hl(cpu)); }
 static void sub_d8(struct Cpu *cpu) { sub(cpu, imm_word(cpu)); }
 
+
+static void sbc(struct Cpu *cpu, uint8_t value)
+{
+    uint16_t carry = cpu->flags.carry ? 1 : 0;
+    uint16_t start = cpu->registers.a;
+    uint16_t result = start - value - carry;
+    cpu->flags.zero = (result & 0x00ff) == 0;
+    cpu->flags.negative = true;
+    cpu->flags.halfCarry = (int16_t)(start & 0x0f) - (int16_t)(value & 0x0f) - (int16_t)carry < 0;
+    cpu->flags.carry = result > 0x00ff;
+    cpu->registers.a = result;
+}
+static void sbc_a(struct Cpu *cpu) { sbc(cpu, cpu->registers.a); }
+static void sbc_b(struct Cpu *cpu) { sbc(cpu, cpu->registers.b); }
+static void sbc_c(struct Cpu *cpu) { sbc(cpu, cpu->registers.c); }
+static void sbc_d(struct Cpu *cpu) { sbc(cpu, cpu->registers.d); }
+static void sbc_e(struct Cpu *cpu) { sbc(cpu, cpu->registers.e); }
+static void sbc_h(struct Cpu *cpu) { sbc(cpu, cpu->registers.h); }
+static void sbc_l(struct Cpu *cpu) { sbc(cpu, cpu->registers.l); }
+static void sbc_hl(struct Cpu *cpu) { sbc(cpu, read_mem_at_hl(cpu)); }
+static void sbc_d8(struct Cpu *cpu) { sbc(cpu, imm_word(cpu)); }
 
 
 static void add_hl_rr(struct Cpu *cpu, uint16_t value)
@@ -526,8 +556,6 @@ static void add_hl_hl(struct Cpu *cpu) { add_hl_rr(cpu, cpu_read_double_reg(cpu,
 static void add_hl_sp(struct Cpu *cpu) { add_hl_rr(cpu, cpu->sp); }
 
 
-
-
 static void cpl(struct Cpu *cpu)
 {
     cpu->registers.a = ~cpu->registers.a;
@@ -540,7 +568,8 @@ static void cpl(struct Cpu *cpu)
 
 static void daa(struct Cpu *cpu)
 {
-    if ((cpu->registers.a & 0x0f) > 0x09 || cpu->flags.halfCarry)
+    uint8_t nibble1 = cpu->registers.a & 0x0f;
+    if ((nibble1 > 9)  || cpu->flags.halfCarry)
     {
         cpu->registers.a += 0x06;
     }
@@ -558,6 +587,21 @@ static void daa(struct Cpu *cpu)
 }
 
 
+static void scf(struct Cpu *cpu)
+{
+    // zero flag not affected
+    cpu->flags.negative = false;
+    cpu->flags.halfCarry = false;
+    cpu->flags.carry = true;
+}
+
+static void ccf(struct Cpu *cpu)
+{
+    // zero flag not affected
+    cpu->flags.negative = false;
+    cpu->flags.halfCarry = false;
+    cpu->flags.carry = ! cpu->flags.carry;
+}
 
 
 
@@ -587,7 +631,7 @@ static void bit(struct Cpu *cpu, uint8_t bitnum, uint8_t value)
 {
     cpu->flags.zero = (value & (1 << bitnum)) == 0;
     cpu->flags.negative = false;
-    cpu->flags.halfCarry = false;
+    cpu->flags.halfCarry = true;
     // carry flag not affected
 }
 static void bit_0_a(struct Cpu *cpu) { bit(cpu, 0, cpu->registers.a); }
@@ -662,6 +706,83 @@ static void bit_7_h(struct Cpu *cpu) { bit(cpu, 7, cpu->registers.h); }
 static void bit_7_l(struct Cpu *cpu) { bit(cpu, 7, cpu->registers.l); }
 static void bit_7_mem_hl(struct Cpu *cpu) { bit(cpu, 7, read_mem_at_hl(cpu)); }
 
+
+
+static uint8_t set(uint8_t bitnum, uint8_t value)
+{
+    return value | (1 << bitnum);
+}
+static void set_0_a(struct Cpu *cpu) { cpu->registers.a = set(0, cpu->registers.a); }
+static void set_0_b(struct Cpu *cpu) { cpu->registers.b = set(0, cpu->registers.b); }
+static void set_0_c(struct Cpu *cpu) { cpu->registers.c = set(0, cpu->registers.c); }
+static void set_0_d(struct Cpu *cpu) { cpu->registers.d = set(0, cpu->registers.d); }
+static void set_0_e(struct Cpu *cpu) { cpu->registers.e = set(0, cpu->registers.e); }
+static void set_0_h(struct Cpu *cpu) { cpu->registers.h = set(0, cpu->registers.h); }
+static void set_0_l(struct Cpu *cpu) { cpu->registers.l = set(0, cpu->registers.l); }
+static void set_0_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, set(0, read_mem_at_hl(cpu))); }
+//
+static void set_1_a(struct Cpu *cpu) { cpu->registers.a = set(1, cpu->registers.a); }
+static void set_1_b(struct Cpu *cpu) { cpu->registers.b = set(1, cpu->registers.b); }
+static void set_1_c(struct Cpu *cpu) { cpu->registers.c = set(1, cpu->registers.c); }
+static void set_1_d(struct Cpu *cpu) { cpu->registers.d = set(1, cpu->registers.d); }
+static void set_1_e(struct Cpu *cpu) { cpu->registers.e = set(1, cpu->registers.e); }
+static void set_1_h(struct Cpu *cpu) { cpu->registers.h = set(1, cpu->registers.h); }
+static void set_1_l(struct Cpu *cpu) { cpu->registers.l = set(1, cpu->registers.l); }
+static void set_1_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, set(1, read_mem_at_hl(cpu))); }
+//
+static void set_2_a(struct Cpu *cpu) { cpu->registers.a = set(2, cpu->registers.a); }
+static void set_2_b(struct Cpu *cpu) { cpu->registers.b = set(2, cpu->registers.b); }
+static void set_2_c(struct Cpu *cpu) { cpu->registers.c = set(2, cpu->registers.c); }
+static void set_2_d(struct Cpu *cpu) { cpu->registers.d = set(2, cpu->registers.d); }
+static void set_2_e(struct Cpu *cpu) { cpu->registers.e = set(2, cpu->registers.e); }
+static void set_2_h(struct Cpu *cpu) { cpu->registers.h = set(2, cpu->registers.h); }
+static void set_2_l(struct Cpu *cpu) { cpu->registers.l = set(2, cpu->registers.l); }
+static void set_2_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, set(2, read_mem_at_hl(cpu))); }
+//
+static void set_3_a(struct Cpu *cpu) { cpu->registers.a = set(3, cpu->registers.a); }
+static void set_3_b(struct Cpu *cpu) { cpu->registers.b = set(3, cpu->registers.b); }
+static void set_3_c(struct Cpu *cpu) { cpu->registers.c = set(3, cpu->registers.c); }
+static void set_3_d(struct Cpu *cpu) { cpu->registers.d = set(3, cpu->registers.d); }
+static void set_3_e(struct Cpu *cpu) { cpu->registers.e = set(3, cpu->registers.e); }
+static void set_3_h(struct Cpu *cpu) { cpu->registers.h = set(3, cpu->registers.h); }
+static void set_3_l(struct Cpu *cpu) { cpu->registers.l = set(3, cpu->registers.l); }
+static void set_3_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, set(3, read_mem_at_hl(cpu))); }
+//
+static void set_4_a(struct Cpu *cpu) { cpu->registers.a = set(4, cpu->registers.a); }
+static void set_4_b(struct Cpu *cpu) { cpu->registers.b = set(4, cpu->registers.b); }
+static void set_4_c(struct Cpu *cpu) { cpu->registers.c = set(4, cpu->registers.c); }
+static void set_4_d(struct Cpu *cpu) { cpu->registers.d = set(4, cpu->registers.d); }
+static void set_4_e(struct Cpu *cpu) { cpu->registers.e = set(4, cpu->registers.e); }
+static void set_4_h(struct Cpu *cpu) { cpu->registers.h = set(4, cpu->registers.h); }
+static void set_4_l(struct Cpu *cpu) { cpu->registers.l = set(4, cpu->registers.l); }
+static void set_4_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, set(4, read_mem_at_hl(cpu))); }
+//
+static void set_5_a(struct Cpu *cpu) { cpu->registers.a = set(5, cpu->registers.a); }
+static void set_5_b(struct Cpu *cpu) { cpu->registers.b = set(5, cpu->registers.b); }
+static void set_5_c(struct Cpu *cpu) { cpu->registers.c = set(5, cpu->registers.c); }
+static void set_5_d(struct Cpu *cpu) { cpu->registers.d = set(5, cpu->registers.d); }
+static void set_5_e(struct Cpu *cpu) { cpu->registers.e = set(5, cpu->registers.e); }
+static void set_5_h(struct Cpu *cpu) { cpu->registers.h = set(5, cpu->registers.h); }
+static void set_5_l(struct Cpu *cpu) { cpu->registers.l = set(5, cpu->registers.l); }
+static void set_5_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, set(5, read_mem_at_hl(cpu))); }
+//
+static void set_6_a(struct Cpu *cpu) { cpu->registers.a = set(6, cpu->registers.a); }
+static void set_6_b(struct Cpu *cpu) { cpu->registers.b = set(6, cpu->registers.b); }
+static void set_6_c(struct Cpu *cpu) { cpu->registers.c = set(6, cpu->registers.c); }
+static void set_6_d(struct Cpu *cpu) { cpu->registers.d = set(6, cpu->registers.d); }
+static void set_6_e(struct Cpu *cpu) { cpu->registers.e = set(6, cpu->registers.e); }
+static void set_6_h(struct Cpu *cpu) { cpu->registers.h = set(6, cpu->registers.h); }
+static void set_6_l(struct Cpu *cpu) { cpu->registers.l = set(6, cpu->registers.l); }
+static void set_6_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, set(6, read_mem_at_hl(cpu))); }
+//
+static void set_7_a(struct Cpu *cpu) { cpu->registers.a = set(7, cpu->registers.a); }
+static void set_7_b(struct Cpu *cpu) { cpu->registers.b = set(7, cpu->registers.b); }
+static void set_7_c(struct Cpu *cpu) { cpu->registers.c = set(7, cpu->registers.c); }
+static void set_7_d(struct Cpu *cpu) { cpu->registers.d = set(7, cpu->registers.d); }
+static void set_7_e(struct Cpu *cpu) { cpu->registers.e = set(7, cpu->registers.e); }
+static void set_7_h(struct Cpu *cpu) { cpu->registers.h = set(7, cpu->registers.h); }
+static void set_7_l(struct Cpu *cpu) { cpu->registers.l = set(7, cpu->registers.l); }
+static void set_7_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, set(7, read_mem_at_hl(cpu))); }
 
 
 static uint8_t res(uint8_t bitnum, uint8_t value)
@@ -779,10 +900,28 @@ static void srl_l(struct Cpu *cpu) { cpu->registers.l = srl(cpu, cpu->registers.
 static void srl_mem_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, srl(cpu, read_mem_at_hl(cpu))); }
 
 
+static uint8_t sra(struct Cpu *cpu, uint8_t value)
+{
+    uint8_t newValue = value >> 1 | (value & 0x80);
+    cpu->flags.zero = newValue == 0;
+    cpu->flags.negative = false;
+    cpu->flags.halfCarry = false;
+    cpu->flags.carry = (value & 0x01) != 0;
+    return newValue;
+}
+static void sra_a(struct Cpu *cpu) { cpu->registers.a = sra(cpu, cpu->registers.a); }
+static void sra_b(struct Cpu *cpu) { cpu->registers.b = sra(cpu, cpu->registers.b); }
+static void sra_c(struct Cpu *cpu) { cpu->registers.c = sra(cpu, cpu->registers.c); }
+static void sra_d(struct Cpu *cpu) { cpu->registers.d = sra(cpu, cpu->registers.d); }
+static void sra_e(struct Cpu *cpu) { cpu->registers.e = sra(cpu, cpu->registers.e); }
+static void sra_h(struct Cpu *cpu) { cpu->registers.h = sra(cpu, cpu->registers.h); }
+static void sra_l(struct Cpu *cpu) { cpu->registers.l = sra(cpu, cpu->registers.l); }
+static void sra_mem_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, sra(cpu, read_mem_at_hl(cpu))); }
+
 
 static uint8_t rlc(struct Cpu *cpu, uint8_t value)
 {
-    uint8_t newValue = (value << 1) | ((value & 0x80) ? 1 : 0);
+    uint8_t newValue = (value << 1) | ((value & 0x80) ? 0x01 : 0);
     cpu->flags.zero = newValue == 0;
     cpu->flags.negative = false;
     cpu->flags.halfCarry = false;
@@ -798,11 +937,86 @@ static void rlc_h(struct Cpu *cpu) { cpu->registers.h = rlc(cpu, cpu->registers.
 static void rlc_l(struct Cpu *cpu) { cpu->registers.l = rlc(cpu, cpu->registers.l); }
 static void rlc_mem_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, rlc(cpu, read_mem_at_hl(cpu))); }
 
+
+static uint8_t rl(struct Cpu *cpu, uint8_t value)
+{
+    uint8_t newValue = (value << 1) | (cpu->flags.carry ? 0x01 : 0);
+    cpu->flags.zero = newValue == 0;
+    cpu->flags.negative = false;
+    cpu->flags.halfCarry = false;
+    cpu->flags.carry = (value & 0x80) != 0;
+    return newValue;
+}
+static void rl_a(struct Cpu *cpu) { cpu->registers.a = rl(cpu, cpu->registers.a); }
+static void rl_b(struct Cpu *cpu) { cpu->registers.b = rl(cpu, cpu->registers.b); }
+static void rl_c(struct Cpu *cpu) { cpu->registers.c = rl(cpu, cpu->registers.c); }
+static void rl_d(struct Cpu *cpu) { cpu->registers.d = rl(cpu, cpu->registers.d); }
+static void rl_e(struct Cpu *cpu) { cpu->registers.e = rl(cpu, cpu->registers.e); }
+static void rl_h(struct Cpu *cpu) { cpu->registers.h = rl(cpu, cpu->registers.h); }
+static void rl_l(struct Cpu *cpu) { cpu->registers.l = rl(cpu, cpu->registers.l); }
+static void rl_mem_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, rl(cpu, read_mem_at_hl(cpu))); }
+
+
+static uint8_t rrc(struct Cpu *cpu, uint8_t value)
+{
+    uint8_t newValue = (value >> 1) | ((value & 0x01) ? 0x80 : 0);
+    cpu->flags.zero = newValue == 0;
+    cpu->flags.negative = false;
+    cpu->flags.halfCarry = false;
+    cpu->flags.carry = (value & 0x01) != 0;
+    return newValue;
+}
+static void rrc_a(struct Cpu *cpu) { cpu->registers.a = rrc(cpu, cpu->registers.a); }
+static void rrc_b(struct Cpu *cpu) { cpu->registers.b = rrc(cpu, cpu->registers.b); }
+static void rrc_c(struct Cpu *cpu) { cpu->registers.c = rrc(cpu, cpu->registers.c); }
+static void rrc_d(struct Cpu *cpu) { cpu->registers.d = rrc(cpu, cpu->registers.d); }
+static void rrc_e(struct Cpu *cpu) { cpu->registers.e = rrc(cpu, cpu->registers.e); }
+static void rrc_h(struct Cpu *cpu) { cpu->registers.h = rrc(cpu, cpu->registers.h); }
+static void rrc_l(struct Cpu *cpu) { cpu->registers.l = rrc(cpu, cpu->registers.l); }
+static void rrc_mem_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, rrc(cpu, read_mem_at_hl(cpu))); }
+
+
+static uint8_t rr(struct Cpu *cpu, uint8_t value)
+{
+    uint8_t newValue = (value >> 1) | (cpu->flags.carry ? 0x80 : 0);
+    cpu->flags.zero = newValue == 0;
+    cpu->flags.negative = false;
+    cpu->flags.halfCarry = false;
+    cpu->flags.carry = (value & 0x01) != 0;
+    return newValue;
+}
+static void rr_a(struct Cpu *cpu) { cpu->registers.a = rr(cpu, cpu->registers.a); }
+static void rr_b(struct Cpu *cpu) { cpu->registers.b = rr(cpu, cpu->registers.b); }
+static void rr_c(struct Cpu *cpu) { cpu->registers.c = rr(cpu, cpu->registers.c); }
+static void rr_d(struct Cpu *cpu) { cpu->registers.d = rr(cpu, cpu->registers.d); }
+static void rr_e(struct Cpu *cpu) { cpu->registers.e = rr(cpu, cpu->registers.e); }
+static void rr_h(struct Cpu *cpu) { cpu->registers.h = rr(cpu, cpu->registers.h); }
+static void rr_l(struct Cpu *cpu) { cpu->registers.l = rr(cpu, cpu->registers.l); }
+static void rr_mem_hl(struct Cpu *cpu) { write_mem_at_hl(cpu, rr(cpu, read_mem_at_hl(cpu))); }
+
+
+
+
 // These non-CB versions are exactly like the CB versions except that the
 // zero flag is always cleared.
 static void rlca(struct Cpu *cpu)
 {
     rlc_a(cpu);
+    cpu->flags.zero = false;
+}
+static void rla(struct Cpu *cpu)
+{
+    rl_a(cpu);
+    cpu->flags.zero = false;
+}
+static void rrca(struct Cpu *cpu)
+{
+    rrc_a(cpu);
+    cpu->flags.zero = false;
+}
+static void rra(struct Cpu *cpu)
+{
+    rr_a(cpu);
     cpu->flags.zero = false;
 }
 
@@ -829,7 +1043,7 @@ const struct Instruction instructions[256] = {
     { "INC C",           0, inc_c },
     { "DEC C",           0, dec_c },
     { "LD C, 0x%02x",    1, ld_c_d8 },
-    { "RRCA",            0, NULL },
+    { "RRCA",            0, rrca },
 
     // 0x10
     { "STOP %d",         1, NULL },
@@ -839,7 +1053,7 @@ const struct Instruction instructions[256] = {
     { "INC D",           0, inc_d },
     { "DEC D",           0, dec_d },
     { "LD D, 0x%02x",    1, ld_d_d8 },
-    { "RLA",             0, NULL },
+    { "RLA",             0, rla },
     { "JR %hhd",         1, jr },
     { "ADD HL, DE",      0, add_hl_de },
     { "LD A, (DE)",      0, ld_a_mem_de },
@@ -847,7 +1061,7 @@ const struct Instruction instructions[256] = {
     { "INC E",           0, inc_e },
     { "DEC E",           0, dec_e },
     { "LD E, 0x%02x",    1, ld_e_d8 },
-    { "RRA",             0, NULL },
+    { "RRA",             0, rra },
 
     // 0x20
     { "JR NZ, %hhd",     1, jr_nz },
@@ -875,7 +1089,7 @@ const struct Instruction instructions[256] = {
     { "INC (HL)",        0, inc_mem_hl },
     { "DEC (HL)",        0, dec_mem_hl },
     { "LD (HL), 0x%02x", 1, ld_mem_hl_d8 },
-    { "SCF",             0, NULL },
+    { "SCF",             0, scf },
     { "JR C, %hhd",      1, jr_c },
     { "ADD HL, SP",      0, add_hl_sp },
     { "LD A, (HL-)",     0, ld_a_mem_hlm },
@@ -883,7 +1097,7 @@ const struct Instruction instructions[256] = {
     { "INC A",           0, inc_a },
     { "DEC A",           0, dec_a },
     { "LD A, 0x%02x",    1, ld_a_d8 },
-    { "CCF",             0, NULL },
+    { "CCF",             0, ccf },
 
     // 0x40
     { "LD B, B",         0, ld_b_b },
@@ -984,14 +1198,14 @@ const struct Instruction instructions[256] = {
     { "SUB L",           0, sub_l },
     { "SUB (HL)",        0, sub_hl },
     { "SUB A",           0, sub_a },
-    { "SBC A, B",        0, NULL },
-    { "SBC A, C",        0, NULL },
-    { "SBC A, D",        0, NULL },
-    { "SBC A, E",        0, NULL },
-    { "SBC A, H",        0, NULL },
-    { "SBC A, L",        0, NULL },
-    { "SBC A, (HL)",     0, NULL },
-    { "SBC A, A",        0, NULL },
+    { "SBC A, B",        0, sbc_b },
+    { "SBC A, C",        0, sbc_c },
+    { "SBC A, D",        0, sbc_d },
+    { "SBC A, E",        0, sbc_e },
+    { "SBC A, H",        0, sbc_h },
+    { "SBC A, L",        0, sbc_l },
+    { "SBC A, (HL)",     0, sbc_hl },
+    { "SBC A, A",        0, sbc_a },
 
     // 0xa0
     { "AND B",           0, and_b },
@@ -1034,7 +1248,7 @@ const struct Instruction instructions[256] = {
     { "POP BC",          0, pop_bc },
     { "JP NZ, 0x%04x",   2, jp_nz_a16 },
     { "JP 0x%04x",       2, jp_a16 },
-    { "CALL NZ, 0x%04x", 2, NULL },
+    { "CALL NZ, 0x%04x", 2, call_nz_a16 },
     { "PUSH BC",         0, push_bc },
     { "ADD A, 0x%02x",   1, add_d8 },
     { "RST 0x00",        0, rst00 },
@@ -1042,7 +1256,7 @@ const struct Instruction instructions[256] = {
     { "RET",             0, ret },
     { "JP Z, 0x%04x",    2, jp_z_a16 },
     { "<prefix cb>",     0, NULL },
-    { "CALL Z, 0x%04x",  2, NULL },
+    { "CALL Z, 0x%04x",  2, call_z_a16 },
     { "CALL 0x%04x",     2, call_a16 },
     { "ADC A, 0x%02x",   1, adc_d8 },
     { "RST 0x08",        0, rst08 },
@@ -1052,7 +1266,7 @@ const struct Instruction instructions[256] = {
     { "POP DE",          0, pop_de },
     { "JP NC, 0x%04x",   2, jp_nc_a16 },
     { "<undocumented>",  0, NULL },
-    { "CALL NC, 0x%04x", 2, NULL },
+    { "CALL NC, 0x%04x", 2, call_nc_a16 },
     { "PUSH DE",         0, push_de },
     { "SUB 0x%02x",      1, sub_d8 },
     { "RST 0x10",        0, rst10 },
@@ -1060,9 +1274,9 @@ const struct Instruction instructions[256] = {
     { "RETI",            0, reti },
     { "JP C, 0x%04x",    2, jp_c_a16 },
     { "<undocumented>",  0, NULL },
-    { "CALL C, 0x%04x",  2, NULL },
+    { "CALL C, 0x%04x",  2, call_c_a16 },
     { "<undocumented>",  0, NULL },
-    { "SBC A, 0x%02x",   1, NULL },
+    { "SBC A, 0x%02x",   1, sbc_d8 },
     { "RST 0x18",        0, rst18 },
 
     // 0xe0
@@ -1080,7 +1294,7 @@ const struct Instruction instructions[256] = {
     { "<undocumented>",  0, NULL },
     { "<undocumented>",  0, NULL },
     { "<undocumented>",  0, NULL },
-    { "XOR A, 0x%02x",   1, NULL },
+    { "XOR A, 0x%02x",   1, xor_d8 },
     { "RST 0x28",        0, rst28 },
 
     // 0xf0
@@ -1103,17 +1317,6 @@ const struct Instruction instructions[256] = {
 };
 
 
-
-
-
-
-
-
-
-
-
-
-
 const struct Instruction cbInstructions[256] = {
     // 0x00
     { "RLC B",      0, rlc_b },
@@ -1124,32 +1327,32 @@ const struct Instruction cbInstructions[256] = {
     { "RLC L",      0, rlc_l },
     { "RLC (HL)",   0, rlc_mem_hl },
     { "RLC A",      0, rlc_a },
-    { "RRC B",      0, NULL },
-    { "RRC C",      0, NULL },
-    { "RRC D",      0, NULL },
-    { "RRC E",      0, NULL },
-    { "RRC H",      0, NULL },
-    { "RRC L",      0, NULL },
-    { "RRC (HL)",   0, NULL },
-    { "RRC A",      0, NULL },
+    { "RRC B",      0, rrc_b },
+    { "RRC C",      0, rrc_c },
+    { "RRC D",      0, rrc_d },
+    { "RRC E",      0, rrc_e },
+    { "RRC H",      0, rrc_h },
+    { "RRC L",      0, rrc_l },
+    { "RRC (HL)",   0, rrc_mem_hl },
+    { "RRC A",      0, rrc_a },
 
     // 0x10
-    { "RL B",       0, NULL },
-    { "RL C",       0, NULL },
-    { "RL D",       0, NULL },
-    { "RL E",       0, NULL },
-    { "RL H",       0, NULL },
-    { "RL L",       0, NULL },
-    { "RL (HL)",    0, NULL },
-    { "RL A",       0, NULL },
-    { "RR B",       0, NULL },
-    { "RR C",       0, NULL },
-    { "RR D",       0, NULL },
-    { "RR E",       0, NULL },
-    { "RR H",       0, NULL },
-    { "RR L",       0, NULL },
-    { "RR (HL)",    0, NULL },
-    { "RR A",       0, NULL },
+    { "RL B",       0, rl_b },
+    { "RL C",       0, rl_c },
+    { "RL D",       0, rl_d },
+    { "RL E",       0, rl_e },
+    { "RL H",       0, rl_h },
+    { "RL L",       0, rl_l },
+    { "RL (HL)",    0, rl_mem_hl },
+    { "RL A",       0, rl_a },
+    { "RR B",       0, rr_b },
+    { "RR C",       0, rr_c },
+    { "RR D",       0, rr_d },
+    { "RR E",       0, rr_e },
+    { "RR H",       0, rr_h },
+    { "RR L",       0, rr_l },
+    { "RR (HL)",    0, rr_mem_hl },
+    { "RR A",       0, rr_a },
 
     // 0x20
     { "SLA B",      0, sla_b },
@@ -1160,14 +1363,14 @@ const struct Instruction cbInstructions[256] = {
     { "SLA L",      0, sla_l },
     { "SLA (HL)",   0, sla_mem_hl },
     { "SLA A",      0, sla_a },
-    { "SRA B",      0, NULL },
-    { "SRA C",      0, NULL },
-    { "SRA D",      0, NULL },
-    { "SRA E",      0, NULL },
-    { "SRA H",      0, NULL },
-    { "SRA L",      0, NULL },
-    { "SRA (HL)",   0, NULL },
-    { "SRA A",      0, NULL },
+    { "SRA B",      0, sra_b },
+    { "SRA C",      0, sra_c },
+    { "SRA D",      0, sra_d },
+    { "SRA E",      0, sra_e },
+    { "SRA H",      0, sra_h },
+    { "SRA L",      0, sra_l },
+    { "SRA (HL)",   0, sra_mem_hl },
+    { "SRA A",      0, sra_a },
 
     // 0x30
     { "SWAP B",     0, swap_b },
@@ -1332,74 +1535,74 @@ const struct Instruction cbInstructions[256] = {
     { "RES 7 A",      0, res_7_a },
 
     // 0xc0
-    { "SET 0 B",      0, NULL },
-    { "SET 0 C",      0, NULL },
-    { "SET 0 D",      0, NULL },
-    { "SET 0 E",      0, NULL },
-    { "SET 0 H",      0, NULL },
-    { "SET 0 L",      0, NULL },
-    { "SET 0 (HL)",   0, NULL },
-    { "SET 0 A",      0, NULL },
-    { "SET 1 B",      0, NULL },
-    { "SET 1 C",      0, NULL },
-    { "SET 1 D",      0, NULL },
-    { "SET 1 E",      0, NULL },
-    { "SET 1 H",      0, NULL },
-    { "SET 1 L",      0, NULL },
-    { "SET 1 (HL)",   0, NULL },
-    { "SET 1 A",      0, NULL },
+    { "SET 0 B",      0, set_0_b },
+    { "SET 0 C",      0, set_0_c },
+    { "SET 0 D",      0, set_0_d },
+    { "SET 0 E",      0, set_0_e },
+    { "SET 0 H",      0, set_0_h },
+    { "SET 0 L",      0, set_0_l },
+    { "SET 0 (HL)",   0, set_0_hl },
+    { "SET 0 A",      0, set_0_a },
+    { "SET 1 B",      0, set_1_b },
+    { "SET 1 C",      0, set_1_c },
+    { "SET 1 D",      0, set_1_d },
+    { "SET 1 E",      0, set_1_e },
+    { "SET 1 H",      0, set_1_h },
+    { "SET 1 L",      0, set_1_l },
+    { "SET 1 (HL)",   0, set_1_hl },
+    { "SET 1 A",      0, set_1_a },
 
     // 0xd0
-    { "SET 2 B",      0, NULL },
-    { "SET 2 C",      0, NULL },
-    { "SET 2 D",      0, NULL },
-    { "SET 2 E",      0, NULL },
-    { "SET 2 H",      0, NULL },
-    { "SET 2 L",      0, NULL },
-    { "SET 2 (HL)",   0, NULL },
-    { "SET 2 A",      0, NULL },
-    { "SET 3 B",      0, NULL },
-    { "SET 3 C",      0, NULL },
-    { "SET 3 D",      0, NULL },
-    { "SET 3 E",      0, NULL },
-    { "SET 3 H",      0, NULL },
-    { "SET 3 L",      0, NULL },
-    { "SET 3 (HL)",   0, NULL },
-    { "SET 3 A",      0, NULL },
+    { "SET 2 B",      0, set_2_b },
+    { "SET 2 C",      0, set_2_c },
+    { "SET 2 D",      0, set_2_d },
+    { "SET 2 E",      0, set_2_e },
+    { "SET 2 H",      0, set_2_h },
+    { "SET 2 L",      0, set_2_l },
+    { "SET 2 (HL)",   0, set_2_hl },
+    { "SET 2 A",      0, set_2_a },
+    { "SET 3 B",      0, set_3_b },
+    { "SET 3 C",      0, set_3_c },
+    { "SET 3 D",      0, set_3_d },
+    { "SET 3 E",      0, set_3_e },
+    { "SET 3 H",      0, set_3_h },
+    { "SET 3 L",      0, set_3_l },
+    { "SET 3 (HL)",   0, set_3_hl },
+    { "SET 3 A",      0, set_3_a },
 
     // 0xe0
-    { "SET 4 B",      0, NULL },
-    { "SET 4 C",      0, NULL },
-    { "SET 4 D",      0, NULL },
-    { "SET 4 E",      0, NULL },
-    { "SET 4 H",      0, NULL },
-    { "SET 4 L",      0, NULL },
-    { "SET 4 (HL)",   0, NULL },
-    { "SET 4 A",      0, NULL },
-    { "SET 5 B",      0, NULL },
-    { "SET 5 C",      0, NULL },
-    { "SET 5 D",      0, NULL },
-    { "SET 5 E",      0, NULL },
-    { "SET 5 H",      0, NULL },
-    { "SET 5 L",      0, NULL },
-    { "SET 5 (HL)",   0, NULL },
-    { "SET 5 A",      0, NULL },
+    { "SET 4 B",      0, set_4_b },
+    { "SET 4 C",      0, set_4_c },
+    { "SET 4 D",      0, set_4_d },
+    { "SET 4 E",      0, set_4_e },
+    { "SET 4 H",      0, set_4_h },
+    { "SET 4 L",      0, set_4_l },
+    { "SET 4 (HL)",   0, set_4_hl },
+    { "SET 4 A",      0, set_4_a },
+    { "SET 5 B",      0, set_5_b },
+    { "SET 5 C",      0, set_5_c },
+    { "SET 5 D",      0, set_5_d },
+    { "SET 5 E",      0, set_5_e },
+    { "SET 5 H",      0, set_5_h },
+    { "SET 5 L",      0, set_5_l },
+    { "SET 5 (HL)",   0, set_5_hl },
+    { "SET 5 A",      0, set_5_a },
 
     // 0xf0
-    { "SET 6 B",      0, NULL },
-    { "SET 6 C",      0, NULL },
-    { "SET 6 D",      0, NULL },
-    { "SET 6 E",      0, NULL },
-    { "SET 6 H",      0, NULL },
-    { "SET 6 L",      0, NULL },
-    { "SET 6 (HL)",   0, NULL },
-    { "SET 6 A",      0, NULL },
-    { "SET 7 B",      0, NULL },
-    { "SET 7 C",      0, NULL },
-    { "SET 7 D",      0, NULL },
-    { "SET 7 E",      0, NULL },
-    { "SET 7 H",      0, NULL },
-    { "SET 7 L",      0, NULL },
-    { "SET 7 (HL)",   0, NULL },
-    { "SET 7 A",      0, NULL },
+    { "SET 6 B",      0, set_6_b },
+    { "SET 6 C",      0, set_6_c },
+    { "SET 6 D",      0, set_6_d },
+    { "SET 6 E",      0, set_6_e },
+    { "SET 6 H",      0, set_6_h },
+    { "SET 6 L",      0, set_6_l },
+    { "SET 6 (HL)",   0, set_6_hl },
+    { "SET 6 A",      0, set_6_a },
+    { "SET 7 B",      0, set_7_b },
+    { "SET 7 C",      0, set_7_c },
+    { "SET 7 D",      0, set_7_d },
+    { "SET 7 E",      0, set_7_e },
+    { "SET 7 H",      0, set_7_h },
+    { "SET 7 L",      0, set_7_l },
+    { "SET 7 (HL)",   0, set_7_hl },
+    { "SET 7 A",      0, set_7_a },
 };
