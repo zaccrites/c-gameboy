@@ -542,12 +542,12 @@ static void sbc_d8(struct Cpu *cpu) { sbc(cpu, imm_word(cpu)); }
 
 static void add_hl_rr(struct Cpu *cpu, uint16_t value)
 {
-    uint16_t hl = cpu_read_double_reg(cpu, CPU_DOUBLE_REG_HL);
-    uint16_t newValue = hl + value;
+    uint32_t hl = cpu_read_double_reg(cpu, CPU_DOUBLE_REG_HL);
+    uint32_t newValue = hl + (uint32_t)value;
     // zero flag not affected
     cpu->flags.negative = false;
-    cpu->flags.halfCarry = (((hl & 0xff) + (value & 0xff)) & 0x0100) != 0;
-    cpu->flags.carry = 0xffff - hl > value;
+    cpu->flags.halfCarry = (((hl & 0x0fff) + (value & 0x0fff)) & 0x1000) != 0;
+    cpu->flags.carry = newValue > 0xffff;
     cpu_write_double_reg(cpu, CPU_DOUBLE_REG_HL, newValue);
 }
 static void add_hl_bc(struct Cpu *cpu) { add_hl_rr(cpu, cpu_read_double_reg(cpu, CPU_DOUBLE_REG_BC)); }
