@@ -33,8 +33,8 @@
 #define MEMORY_WRAM_BANK1_SIZE     0x1000
 #define MEMORY_WRAM_BANK1_END      (MEMORY_WRAM_BANK1_START + MEMORY_WRAM_BANK1_SIZE - 1)
 // Echo of work RAM
-#define MEMORY_ECHO_START          0xe000
-#define MEMORY_ECHO_END            0xfdff
+#define MEMORY_WRAM_ECHO_START     0xe000
+#define MEMORY_WRAM_ECHO_END       0xfdff
 // Object Attribute Memory
 #define MEMORY_OAM_START           0xfe00
 #define MEMORY_OAM_SIZE            160

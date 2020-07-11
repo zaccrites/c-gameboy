@@ -32,10 +32,9 @@ uint8_t memory_read_word(struct Memory *memory, uint16_t address)
     {
         return memory->wramBank1[address - MEMORY_WRAM_BANK1_START];
     }
-    else if (address <= MEMORY_ECHO_END)
+    else if (address <= MEMORY_WRAM_ECHO_END)
     {
-        // TODO: Emulate work ram echo if needed
-        assert(false);
+        return memory_read_word(memory, address - MEMORY_WRAM_ECHO_START + MEMORY_WRAM_BANK0_START);
     }
     else if (address <= MEMORY_OAM_END)
     {
@@ -43,10 +42,6 @@ uint8_t memory_read_word(struct Memory *memory, uint16_t address)
     }
     else if (address <= MEMORY_NOT_USABLE_END)
     {
-        // Should never be used, but including this assertion just in case.
-        // In the end this can be a NOP.
-        // assert(false);
-        // fprintf(stderr, "  Read from unusable address 0x%04x \n", address);
         return 0x00;
     }
     else if (address <= MEMORY_IO_END)
@@ -94,10 +89,9 @@ void memory_write_word(struct Memory *memory, uint16_t address, uint8_t value)
     {
         memory->wramBank1[address - MEMORY_WRAM_BANK1_START] = value;
     }
-    else if (address <= MEMORY_ECHO_END)
+    else if (address <= MEMORY_WRAM_ECHO_END)
     {
-        // TODO: Emulate work ram echo if needed
-        assert(false);
+        memory_write_word(memory, address - MEMORY_WRAM_ECHO_START + MEMORY_WRAM_BANK0_START, value);
     }
     else if (address <= MEMORY_OAM_END)
     {
@@ -105,11 +99,6 @@ void memory_write_word(struct Memory *memory, uint16_t address, uint8_t value)
     }
     else if (address <= MEMORY_NOT_USABLE_END)
     {
-        // Should never be used, but including this assertion just in case.
-        // In the end this can be a NOP.
-        // assert(false);
-        // fprintf(stderr, "  Wrote 0x%02x to unusable address 0x%04x \n", value, address);
-
         // Do nothing
     }
     else if (address <= MEMORY_IO_END)
