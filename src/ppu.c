@@ -137,12 +137,12 @@ static void ppu_render_line(struct Ppu *ppu, uint8_t *pixelBuffer)
 
 
 
-#define CYCLES_MODE_OAM_SEARCH  77
-#define CYCLES_MODE_DRAWING     169
-#define CYCLES_MODE_HBLANK      201
+#define CYCLES_MODE_OAM_SEARCH  20
+#define CYCLES_MODE_DRAWING     43
+#define CYCLES_MODE_HBLANK      51
 #define CYCLES_PER_LINE         (CYCLES_MODE_OAM_SEARCH + CYCLES_MODE_DRAWING + CYCLES_MODE_HBLANK)
 
-#define NUM_VBLANK_LINES  9
+#define NUM_VBLANK_LINES        10
 
 
 bool ppu_tick(struct Ppu *ppu, struct Cpu *cpu, int cycles, uint8_t *pixelBuffer)
