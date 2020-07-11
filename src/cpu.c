@@ -279,12 +279,10 @@ bool cpu_execute_next(struct Cpu *cpu)
     cpu->pc += (opcode == 0xcb) ? 2 : 1;
 
     static bool tracing = false;
-    // if (pcStart == 0x029c) tracing = true;
-    // tracing = cpu->registers.c < 0x02;
-    // tracing = true;
-
     if (tracing || isUnimplementedInstruction)
     {
+        // TODO: Move this outside the CPU and have it also print stuff related to
+        // the rest of the system (P1 register, LY, LCDC, STAT, IE, IF, etc.)
         fprintf(
             stdout,
             "PC=%04x | %-8s | %-16s | AF=%04x (%c%c%c%c)  BC=%04x  DE=%04x  HL=%04x  SP=%04x  IME=%d \n",
@@ -306,19 +304,10 @@ bool cpu_execute_next(struct Cpu *cpu)
 
     if (isUnimplementedInstruction)
     {
-        fprintf(stderr, "Unimplemented instruction! ([%s] = \"%s\") Stopping. \n", instrBytesBuffer, instrNameBuffer);
+        fprintf(stderr, "Unimplemented instruction ([%s] = \"%s\")! Stopping. \n", instrBytesBuffer, instrNameBuffer);
         return false;
     }
-    else
-    {
-        // TODO: better way?
-        instruction->impl(cpu);
 
-
-        if (cpu->pc == 0x0038) return false;
-
-
-
-        return true;
-    }
+    instruction->impl(cpu);
+    return true;
 }
