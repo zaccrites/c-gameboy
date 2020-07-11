@@ -11,43 +11,6 @@
 #include "keypad.h"
 
 
-// // TODO: Find a better place for this.
-// static uint8_t read_unimpl_io_reg(IoRegisterFuncContext context) { (void)context; return 0xff; }
-// static void write_unimpl_io_reg(IoRegisterFuncContext context, uint8_t value) { (void)context; (void)value; }
-// static void setup_unimplemented_io_registers(struct Memory *memory)
-// {
-//     uint8_t regnums[] = {
-//         // Joypad
-//         0x00,
-//         // Serial
-//         0x01, 0x02,
-//         // DIV Register
-//         0x04,
-//         // Timer
-//         0x05, 0x06, 0x07,
-//         // Sound
-//         0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e,
-//         0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26,
-//         0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
-
-//         // These IO devices don't exist, but can still be written to anyway.
-//         // They should always return 0xff
-//         0x1f,
-//         0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7a, 0x7b, 0x7c, 0x7d, 0x
-//     };
-//     for (size_t i = 0; i < sizeof(regnums) / sizeof(regnums[0]); i++)
-//     {
-//         memory_register_io_handler(
-//             memory,
-//             regnums[i],
-//             read_unimpl_io_reg,
-//             write_unimpl_io_reg,
-//             NULL
-//         );
-//     }
-// }
-
-
 int main(int argc, char **argv)
 {
     if (argc < 2)
@@ -77,7 +40,6 @@ int main(int argc, char **argv)
         statusCode = 1;
         goto cleanup_memory;
     }
-    // setup_unimplemented_io_registers(&memory);
 
     struct Graphics graphics;
     if ( ! graphics_init(&graphics))
@@ -96,25 +58,18 @@ int main(int argc, char **argv)
     struct Keypad keypad;
     keypad_init(&keypad, &memory);
 
-    int cycles = 0;
     bool isRunning = true;
-    uint8_t lastLY = 0;
     while (isRunning)
     {
-
-
         // TODO
         if ( ! cpu_execute_next(&cpu))
         {
             isRunning = false;
         }
         int instructionCycles = 1;  // TODO: accurate number of cycles for each instruction
-        cycles += instructionCycles;
-        ppu_tick(&ppu, &cpu, instructionCycles);
+        bool enteringVBlank = ppu_tick(&ppu, &cpu, instructionCycles, graphics.pixelBuffer);
 
-
-        // TODO: Look for VBlank
-        if (cycles == 1000000/60)
+        if (enteringVBlank)
         {
             struct InputState inputState = input_get_state();
             if (inputState.quit)
@@ -122,23 +77,20 @@ int main(int argc, char **argv)
                 isRunning = false;
             }
 
-            keypad_tick(&keypad, &cpu);
+            if (inputState.buttonSelect)
+            {
+                FILE *f = fopen("vram.bin", "wb");
+                fwrite(memory.vram, sizeof(memory.vram[0]), sizeof(memory.vram), f);
+                fclose(f);
+                printf("Wrote contents of VRAM to file \n");
+            }
 
-            cycles = 0;
+            keypad_tick(&keypad, &cpu);
+            graphics_update(&graphics);
 
             // TODO: Measure elasped time and sleep to achieve 60 FPS.
-            // SDL_Delay(16);
+            SDL_Delay(16);
         }
-
-
-        // bool isVblank = ppu_get_mode(&ppu) == PPU_MODE_VBLANK;
-        if (lastLY != LCD_HEIGHT+2 && ppu.currentLine == LCD_HEIGHT+2)
-        {
-            ppu_render_vram(&ppu, graphics.pixelBuffer);
-            graphics_update(&graphics);
-        }
-        lastLY = ppu.currentLine;
-
     }
 
 cleanup_graphics:

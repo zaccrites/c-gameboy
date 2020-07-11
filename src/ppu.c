@@ -11,45 +11,78 @@
 
 struct Object
 {
-    int x;
+    uint8_t y;
+    uint8_t x;
+    uint8_t patternIndex;
+    bool priority;
+    bool yFlip;
+    bool xFlip;
+    bool palette;
 };
 
-// // Find which objects are visible on this scan line
-// static size_t oam_search(struct Ppu *ppu, struct Object *objects)
-// {
-//     // Assume that objects is at least of length MAX_OBJECTS_PER_LINE
 
-//     // TODO
-//     (void)ppu;
-//     (void)objects;
-//     return 0;
-// }
-
-
-// // Draw a single line
-// void ppu_render_scanline(struct Ppu *ppu, uint8_t *buffer)
-// {
-
-// }
-
-
-
-
-
-
-enum PpuMode ppu_get_mode(struct Ppu *ppu)
+// Find which objects are visible on this scan line
+static size_t oam_search(struct Ppu *ppu, struct Object *objects)
 {
-    if (ppu->currentLine >= LCD_HEIGHT)
-    {
-        return PPU_MODE_VBLANK;
-    }
+    // Assume that objects is at least of length MAX_OBJECTS_PER_LINE
 
     // TODO
-    return PPU_MODE_DRAWING;
-
+    (void)ppu;
+    (void)objects;
+    return 0;
 }
 
-#include <stdio.h>
+
+static enum Color get_background_palette_color(struct Ppu *ppu, uint8_t colorNumber)
+{
+    assert(colorNumber < 4);
+    return ppu->backgroundPalette[colorNumber];
+}
+
+// static bool get_object_palette_color(struct Ppu *ppu, bool paletteFlag, uint8_t colorNumber, enum Color *color)
+// {
+//     assert(colorNumber < 4);
+//     if (colorNumber == 0)
+//     {
+//         // All object pixels with color number 0 are transparent.
+//         return false;
+//     }
+//     enum Color *palette = paletteFlag ? ppu->objectPalette1 : ppu->objectPalette0;
+//     *color = palette[colorNumber - 1];
+//     return true;
+// }
+
+
+
+static void get_color_rgb(enum Color color, uint8_t *r, uint8_t *g, uint8_t *b)
+{
+    switch (color)
+    {
+    case COLOR_LIGHTEST:
+        *r = LCD_COLOR_LIGHTEST_R;
+        *g = LCD_COLOR_LIGHTEST_G;
+        *b = LCD_COLOR_LIGHTEST_B;
+        break;
+    case COLOR_LIGHTER:
+        *r = LCD_COLOR_LIGHTER_R;
+        *g = LCD_COLOR_LIGHTER_G;
+        *b = LCD_COLOR_LIGHTER_B;
+        break;
+    case COLOR_DARKER:
+        *r = LCD_COLOR_DARKER_R;
+        *g = LCD_COLOR_DARKER_G;
+        *b = LCD_COLOR_DARKER_B;
+        break;
+    case COLOR_DARKEST:
+        *r = LCD_COLOR_DARKEST_R;
+        *g = LCD_COLOR_DARKEST_G;
+        *b = LCD_COLOR_DARKEST_B;
+        break;
+    default:
+        assert(false);
+    }
+}
+
 
 #define VRAM_TILE_DATA_INDEX            0
 #define VRAM_TILE_PATTERN_TABLE0_INDEX  VRAM_TILE_DATA_INDEX
@@ -59,102 +92,120 @@ enum PpuMode ppu_get_mode(struct Ppu *ppu)
 #define VRAM_TILE_BACKGROUND_MAP1_INDEX 0x1c00
 
 
-void ppu_render_vram(struct Ppu *ppu, uint8_t *buffer)
+static void ppu_render_line(struct Ppu *ppu, uint8_t *pixelBuffer)
 {
-    // TODO: Render line by line properly, not all at once.
-    for (uint8_t y0 = 0; y0 < LCD_HEIGHT; y0++)
+    struct Object objects[MAX_OBJECTS_PER_LINE];
+    size_t numObjectsOnLine = oam_search(ppu, objects);
+    (void)numObjectsOnLine;
+
+    uint8_t y0 = ppu->currentLine;
+    uint8_t y = y0 + ppu->scrollY;
+    size_t tileCoordY = y / 8;
+    size_t tilePixelCoordY = y % 8;
+
+    for (uint8_t x0 = 0; x0 < LCD_WIDTH; x0++)
     {
-        uint8_t y = y0 + ppu->scrollY;
-        size_t tileCoordY = y / 8;
-        size_t tilePixelCoordY = y % 8;
+        uint8_t x = x0 + ppu->scrollX;
+        size_t tileCoordX = x / 8;
+        size_t tilePixelCoordX = x % 8;
 
-        for (uint8_t x0 = 0; x0 < LCD_WIDTH; x0++)
-        {
-            uint8_t x = x0 + ppu->scrollX;
-            size_t tileCoordX = x / 8;
-            size_t tilePixelCoordX = x % 8;
+        size_t tileIndex = (tileCoordY * 32) + tileCoordX;
+        size_t tilePatternIndex = ppu->memory->vram[VRAM_TILE_BACKGROUND_MAP0_INDEX + tileIndex];  // TODO: other tile map
+        uint8_t *tilePixelData = &ppu->memory->vram[16 * tilePatternIndex];
+        uint8_t *tileLinePixelData = tilePixelData + 2 * tilePixelCoordY;
+        uint8_t tileByte0 = tileLinePixelData[0];
+        uint8_t tileByte1 = tileLinePixelData[1];
 
-            size_t tileIndex = (tileCoordY * 32) + tileCoordX;
-            size_t tilePatternIndex = ppu->memory->vram[VRAM_TILE_BACKGROUND_MAP0_INDEX + tileIndex];  // TODO: other tile map
-            uint8_t *tilePixelData = &ppu->memory->vram[16 * tilePatternIndex];
-            uint8_t *tileLinePixelData = tilePixelData + 2 * tilePixelCoordY;
-            uint8_t tileByte0 = tileLinePixelData[0];
-            uint8_t tileByte1 = tileLinePixelData[1];
+        uint8_t colorNumber = (
+                ((tileByte0 & (1 << (7 - tilePixelCoordX))) << 1) |
+                (tileByte1 & (1 << (7 - tilePixelCoordX)))
+        ) >> (7 - tilePixelCoordX);
+        enum Color pixelColor = get_background_palette_color(ppu, colorNumber);
 
-            // TODO: convert raw number into *chosen pallete color*
-            enum Color pixelColor = (enum Color)(
-                (
-                    ((tileByte0 & (1 << (7 - tilePixelCoordX))) << 1) |
-                    (tileByte1 & (1 << (7 - tilePixelCoordX)))
-                ) >> (7 - tilePixelCoordX)
-            );
+        uint8_t r;
+        uint8_t g;
+        uint8_t b;
+        get_color_rgb(pixelColor, &r, &g, &b);
 
-            uint8_t r;
-            uint8_t g;
-            uint8_t b;
-            switch (pixelColor)
-            {
-            case COLOR_LIGHTEST:
-                r = LCD_COLOR_LIGHTEST_R;
-                g = LCD_COLOR_LIGHTEST_G;
-                b = LCD_COLOR_LIGHTEST_B;
-                break;
-            case COLOR_LIGHTER:
-                r = LCD_COLOR_LIGHTER_R;
-                g = LCD_COLOR_LIGHTER_G;
-                b = LCD_COLOR_LIGHTER_B;
-                break;
-            case COLOR_DARKER:
-                r = LCD_COLOR_DARKER_R;
-                g = LCD_COLOR_DARKER_G;
-                b = LCD_COLOR_DARKER_B;
-                break;
-            case COLOR_DARKEST:
-                r = LCD_COLOR_DARKEST_R;
-                g = LCD_COLOR_DARKEST_G;
-                b = LCD_COLOR_DARKEST_B;
-                break;
-            default:
-                printf("uh oh, color is 0x%x \n", pixelColor);
-                assert(false);
-            }
-
-            size_t i = y0 * LCD_WIDTH + x0;
-            buffer[4 * i + 0] = b;
-            buffer[4 * i + 1] = g;
-            buffer[4 * i + 2] = r;
-            buffer[4 * i + 3] = 0xff;
-
-        }
+        size_t i = y0 * LCD_WIDTH + x0;
+        pixelBuffer[4 * i + 0] = b;
+        pixelBuffer[4 * i + 1] = g;
+        pixelBuffer[4 * i + 2] = r;
+        pixelBuffer[4 * i + 3] = 0xff;
     }
 }
 
 
 
+#define CYCLES_MODE_OAM_SEARCH  77
+#define CYCLES_MODE_DRAWING     169
+#define CYCLES_MODE_HBLANK      201
+#define CYCLES_PER_LINE         (CYCLES_MODE_OAM_SEARCH + CYCLES_MODE_DRAWING + CYCLES_MODE_HBLANK)
 
-void ppu_tick(struct Ppu *ppu, struct Cpu *cpu, int cycles)
+#define NUM_VBLANK_LINES  9
+
+
+bool ppu_tick(struct Ppu *ppu, struct Cpu *cpu, int cycles, uint8_t *pixelBuffer)
 {
+    bool enteringVBlank = false;
+
     // Advance the line or pixel count, update VRAM/OAM lock state, etc.
     ppu->cycleCounter += cycles;
-
-    // TODO: more accurate timing
-    // for now just advance the current line every 456 clocks
-    if (ppu->cycleCounter >= 456)
+    switch (ppu->mode)
     {
-        ppu->currentLine += 1;
-        if (ppu->currentLine > 153)
+    case PPU_MODE_OAM_SEARCH:
+        if (ppu->cycleCounter >= CYCLES_MODE_OAM_SEARCH)
         {
-            ppu->currentLine = 0;
+            ppu->cycleCounter = 0;
+            ppu->mode = PPU_MODE_DRAWING;
+            // TODO: VRAM/OAM lock
         }
-        else if (ppu->currentLine > LCD_HEIGHT)
+        break;
+    case PPU_MODE_DRAWING:
+        if (ppu->cycleCounter >= CYCLES_MODE_DRAWING)
         {
-            cpu_request_interrupt(cpu, INTERRUPT_VBLANK);
-            // printf("VBLANK! \n");
+            ppu->cycleCounter = 0;
+            ppu->mode = PPU_MODE_HBLANK;
+            // TODO: VRAM/OAM lock
         }
-        ppu->cycleCounter = 0;
+        break;
+    case PPU_MODE_HBLANK:
+        if (ppu->cycleCounter >= CYCLES_MODE_HBLANK)
+        {
+            ppu->cycleCounter = 0;
+            ppu_render_line(ppu, pixelBuffer);
+            ppu->currentLine += 1;
+            if (ppu->currentLine >= LCD_HEIGHT)
+            {
+                ppu->mode = PPU_MODE_VBLANK;
+                cpu_request_interrupt(cpu, INTERRUPT_VBLANK);
+                enteringVBlank = true;
+            }
+            else
+            {
+                ppu->mode = PPU_MODE_OAM_SEARCH;
+            }
+        }
+        break;
+    case PPU_MODE_VBLANK:
+        if (ppu->cycleCounter > CYCLES_PER_LINE)
+        {
+            ppu->cycleCounter = 0;
+            ppu->currentLine += 1;
+            if (ppu->currentLine >= LCD_HEIGHT + NUM_VBLANK_LINES)
+            {
+                ppu->currentLine = 0;
+                ppu->mode = PPU_MODE_OAM_SEARCH;
+            }
+        }
+        break;
+    default:
+        assert(false);
+        break;
     }
-}
 
+    return enteringVBlank;
+}
 
 
 #define IO_REGISTER_LCD_CONTROL  0x40
@@ -238,6 +289,8 @@ static void io_handler_write_ly(IoRegisterFuncContext context, uint8_t value)
     (void)value;
     struct Ppu *ppu = context;
     ppu->currentLine = 0;
+    ppu->cycleCounter = 0;
+    ppu->mode = PPU_MODE_OAM_SEARCH;
 }
 
 #define IO_REGISTER_LY_COMPARE  0x45
@@ -344,6 +397,9 @@ static void io_handler_write_window_x(IoRegisterFuncContext context, uint8_t val
 
 void ppu_init(struct Ppu *ppu, struct Memory *memory)
 {
+    ppu->cycleCounter = 0;
+    ppu->mode = PPU_MODE_OAM_SEARCH;
+
     ppu->currentLine = 0;
     ppu->scrollX = 0;
     ppu->scrollY = 0;

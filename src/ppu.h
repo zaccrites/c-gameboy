@@ -31,6 +31,7 @@ enum PpuMode
 struct Ppu
 {
     int cycleCounter;
+    enum PpuMode mode;
 
     uint8_t currentLine;
     uint8_t currentLineCompare;
@@ -57,11 +58,7 @@ struct Ppu
 
 
 void ppu_init(struct Ppu *ppu, struct Memory *memory);
-
-void ppu_tick(struct Ppu *ppu, struct Cpu *cpu, int cycles);
-
-void ppu_render_vram(struct Ppu *ppu, uint8_t *buffer);
-enum PpuMode ppu_get_mode(struct Ppu *ppu);
+bool ppu_tick(struct Ppu *ppu, struct Cpu *cpu, int cycles, uint8_t *pixelBuffer);
 
 
 #endif
