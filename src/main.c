@@ -9,6 +9,23 @@
 #include "cpu.h"
 #include "ppu.h"
 #include "keypad.h"
+#include "dma.h"
+
+
+void dumpMemory(struct Memory *memory)
+{
+    FILE *f;
+
+    f = fopen("vram.bin", "wb");
+    fwrite(memory->vram, sizeof(memory->vram[0]), sizeof(memory->vram), f);
+    fclose(f);
+
+    f = fopen("oam.bin", "wb");
+    fwrite(memory->oam, sizeof(memory->oam[0]), sizeof(memory->oam), f);
+    fclose(f);
+
+    printf("Memory dumped to file \n");
+}
 
 
 int main(int argc, char **argv)
@@ -58,6 +75,9 @@ int main(int argc, char **argv)
     struct Keypad keypad;
     keypad_init(&keypad, &memory);
 
+    struct Dma dma;
+    dma_init(&dma, &memory);
+
     struct InputState inputState = input_get_state();
 
     bool isRunning = true;
@@ -78,14 +98,9 @@ int main(int argc, char **argv)
         {
             isRunning = false;
         }
-        if (inputState.buttonSelect)
+        if (inputState.dumpMemory)
         {
-            FILE *f;
-
-            f = fopen("vram.bin", "wb");
-            fwrite(memory.vram, sizeof(memory.vram[0]), sizeof(memory.vram), f);
-            fclose(f);
-            printf("Wrote contents of VRAM to file \n");
+            dumpMemory(&memory);
         }
 
         if (enteringVBlank)
@@ -93,7 +108,7 @@ int main(int argc, char **argv)
             graphics_update(&graphics);
 
             // TODO: Measure elasped time and sleep to achieve 60 FPS.
-            SDL_Delay(16);
+            // SDL_Delay(16);
         }
     }
 

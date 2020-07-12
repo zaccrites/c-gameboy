@@ -77,14 +77,9 @@ struct Memory
     uint8_t wramBank1[MEMORY_WRAM_BANK1_SIZE];
     uint8_t oam[MEMORY_OAM_SIZE];
     uint8_t highRam[MEMORY_HIGH_RAM_SIZE];
-    uint8_t interruptEnableRegister;
 
     struct IoRegisterHandler ioRegisterHandlers[MEMORY_IO_SIZE];
     struct IoRegisterHandler interruptEnableRegisterHandler;
-
-    // IoRegisterReadFunc ioRegisterReadFuncs[MEMORY_IO_SIZE];
-    // IoRegisterWriteFunc ioRegisterWriteFuncs[MEMORY_IO_SIZE];
-    // IoRegisterFuncContext ioRegisterFuncContexts[MEMORY_IO_SIZE];
 };
 
 

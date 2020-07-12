@@ -1,5 +1,7 @@
 
 #include <assert.h>
+#include <stdlib.h>
+#include <stdio.h>
 
 #include "ppu.h"
 #include "memory.h"
@@ -7,10 +9,13 @@
 #include "cpu.h"
 
 
+#define MAX_OBJECTS           40
 #define MAX_OBJECTS_PER_LINE  10
+
 
 struct Object
 {
+    size_t index;
     uint8_t y;
     uint8_t x;
     uint8_t patternIndex;
@@ -18,18 +23,102 @@ struct Object
     bool yFlip;
     bool xFlip;
     bool palette;
+    // FUTURE: CGB-only flags
 };
+
+static int object_object_render_sorting(const void *rawObj1, const void *rawObj2)
+{
+    // Objects with lower X coords are drawn over objects with
+    // larger X coords. Therefore we sort the array in descending
+    // X coords so that the final sprite drawn will be the one with the
+    // smallest X coord.
+    //
+    // Objects with the same X coord will be sorted in descending index
+    // number in OAM so that the sprite with the lowest number is drawn
+    // first in that case.
+
+    const struct Object *obj1 = rawObj1;
+    const struct Object *obj2 = rawObj2;
+
+    if (obj2->x < obj1->x)
+    {
+        return -1;
+    }
+    else if (obj1->x < obj2->x)
+    {
+        return 1;
+    }
+    else
+    {
+        if (obj2->index < obj1->index)
+        {
+            return -1;
+        }
+        else
+        {
+            // We assume that the indices will never be the same.
+            return 1;
+        }
+    }
+}
+
+
+
+
+#define OBJECT_SIZE_8x16  true
+#define OBJECT_SIZE_8x8   false
+
 
 
 // Find which objects are visible on this scan line
 static size_t oam_search(struct Ppu *ppu, struct Object *objects)
 {
     // Assume that objects is at least of length MAX_OBJECTS_PER_LINE
+    size_t objectsFound = 0;
 
-    // TODO
-    (void)ppu;
-    (void)objects;
-    return 0;
+    for (size_t i = 0; i < MAX_OBJECTS && objectsFound < MAX_OBJECTS_PER_LINE; i++)
+    {
+        uint8_t *rawObject = &ppu->memory->oam[4 * i];
+        int16_t y = rawObject[0];
+
+        if (y != 0)
+        {
+            // printf("OBJECT %lu X=0x%02x, Y=0x%02x \n", i, rawObject[1], rawObject[0]);
+        }
+
+        int16_t currentLine = ppu->currentLine;
+
+        // For e.g. 16px tall objects, the first visible line is LY=0 when Y=16.
+        int16_t objectHeight = (ppu->objectSize == OBJECT_SIZE_8x16) ? 16 : 8;
+        bool currentlyAbove = currentLine < y - objectHeight * 2;
+        bool currentlyBelow = currentLine >= y - objectHeight;
+        // bool currentlyAbove = currentLine <= y - objectHeight;
+        // bool currentlyBelow = currentLine >= y;
+        bool objectVisible = ! (currentlyAbove || currentlyBelow);
+
+        if (objectVisible  && false)
+        {
+            printf("currentLine = %d, y = %d, y - objectHeight = %d | currentlyAbove? = %d, currentlyBelow? = %d \n",
+                currentLine, y, y - objectHeight,
+                currentlyAbove, currentlyBelow);
+        }
+
+        if (objectVisible)
+        {
+            struct Object object = {
+                .index = i,
+                .y = y,
+                .x = rawObject[1],
+                .patternIndex = rawObject[2],
+                .priority = (rawObject[3] & (1 << 7)) != 0,
+                .yFlip = (rawObject[3] & (1 << 6)) != 0,
+                .xFlip = (rawObject[3] & (1 << 5)) != 0,
+                .palette = (rawObject[3] & (1 << 4)) != 0,
+            };
+            objects[objectsFound++] = object;
+        }
+    }
+    return objectsFound;
 }
 
 
@@ -39,18 +128,18 @@ static enum Color get_background_palette_color(struct Ppu *ppu, uint8_t colorNum
     return ppu->backgroundPalette[colorNumber];
 }
 
-// static bool get_object_palette_color(struct Ppu *ppu, bool paletteFlag, uint8_t colorNumber, enum Color *color)
-// {
-//     assert(colorNumber < 4);
-//     if (colorNumber == 0)
-//     {
-//         // All object pixels with color number 0 are transparent.
-//         return false;
-//     }
-//     enum Color *palette = paletteFlag ? ppu->objectPalette1 : ppu->objectPalette0;
-//     *color = palette[colorNumber - 1];
-//     return true;
-// }
+static bool get_object_palette_color(struct Ppu *ppu, bool paletteFlag, uint8_t colorNumber, enum Color *color)
+{
+    assert(colorNumber < 4);
+    if (colorNumber == 0)
+    {
+        // All object pixels with color number 0 are transparent.
+        return false;
+    }
+    enum Color *palette = paletteFlag ? ppu->objectPalette1 : ppu->objectPalette0;
+    *color = palette[colorNumber - 1];
+    return true;
+}
 
 
 
@@ -92,11 +181,22 @@ static void get_color_rgb(enum Color color, uint8_t *r, uint8_t *g, uint8_t *b)
 #define VRAM_TILE_BACKGROUND_MAP1_INDEX 0x1c00
 
 
+
+
 static void ppu_render_line(struct Ppu *ppu, uint8_t *pixelBuffer)
 {
     struct Object objects[MAX_OBJECTS_PER_LINE];
     size_t numObjectsOnLine = oam_search(ppu, objects);
-    (void)numObjectsOnLine;
+    if (numObjectsOnLine > 0)
+    {
+        // printf("Found %lu objects on line %u \n", numObjectsOnLine, ppu->currentLine);
+        // printf("   object[0].y = %u \n", objects[0].y);
+    }
+    else
+    {
+        // return;
+    }
+    qsort(objects, numObjectsOnLine, sizeof(struct Object), object_object_render_sorting);
 
     uint8_t y0 = ppu->currentLine;
     uint8_t y = y0 + ppu->scrollY;
@@ -109,18 +209,69 @@ static void ppu_render_line(struct Ppu *ppu, uint8_t *pixelBuffer)
         size_t tileCoordX = x / 8;
         size_t tilePixelCoordX = x % 8;
 
+        // tileIndex is the sequential tile number starting from the top left at 0 and ending at the bottom right at 1023 (32x32 - 1)
         size_t tileIndex = (tileCoordY * 32) + tileCoordX;
+        // This is used as an index into VRAM to obtain the desired tile pattern number to draw for that tile
         size_t tilePatternIndex = ppu->memory->vram[VRAM_TILE_BACKGROUND_MAP0_INDEX + tileIndex];  // TODO: other tile map
+        // This number can then be used to look into a different part of VRAM to get the actual tile data
         uint8_t *tilePixelData = &ppu->memory->vram[16 * tilePatternIndex];
         uint8_t *tileLinePixelData = tilePixelData + 2 * tilePixelCoordY;
         uint8_t tileByte0 = tileLinePixelData[0];
         uint8_t tileByte1 = tileLinePixelData[1];
 
-        uint8_t colorNumber = (
+        uint8_t backgroundColorNumber = (
                 ((tileByte0 & (1 << (7 - tilePixelCoordX))) << 1) |
                 (tileByte1 & (1 << (7 - tilePixelCoordX)))
         ) >> (7 - tilePixelCoordX);
-        enum Color pixelColor = get_background_palette_color(ppu, colorNumber);
+        enum Color pixelColor = get_background_palette_color(ppu, backgroundColorNumber);
+
+
+
+
+        // TODO: Sprite/BG priority
+        // TODO: 8x16 mode tile selection
+
+        // Now look at the objects for this pixel
+        for (size_t i = 0; i < numObjectsOnLine; i++)
+        {
+            // We already know that the object is visible.
+            // The question is which object pixel aligns with the screen pixel
+            // we're looking at now, if any.
+
+            int16_t currentLine = ppu->currentLine;
+            int16_t objectWidth = 8;  // constant
+            int16_t objectHeight = (ppu->objectSize == OBJECT_SIZE_8x16) ? 16 : 8;
+            // bool currentlyAbove = currentLine <= y - objectHeight;
+            // bool currentlyBelow = currentLine >= y;
+
+            const struct Object *obj = &objects[i];
+            int16_t objectPixelY = (currentLine - obj->y) + 2*objectHeight;
+            int16_t objectPixelX = ((int16_t)x0 - obj->x) + objectWidth;
+            if (objectPixelX >= 0 && objectPixelX < 8)
+            {
+                // printf("OBJ[%lu] visible at screen pixel (%u,%u) showing tile pixel (%d,%d) \n", i, x0, y0, objectPixelX, objectPixelY);
+
+                tilePatternIndex = obj->patternIndex;
+                tilePixelData = &ppu->memory->vram[16 * tilePatternIndex];  // TODO: may need to change this for 8x16 sprites
+                tileLinePixelData = tilePixelData + 2 * (uint8_t)objectPixelY;
+                tileByte0 = tileLinePixelData[0];
+                tileByte1 = tileLinePixelData[1];
+
+                // TODO: xFlip and yFlip
+                uint8_t objectColorNumber = (
+                        ((tileByte0 & (1 << (7 - (uint8_t)objectPixelX))) << 1) |
+                        (tileByte1 & (1 << (7 - (uint8_t)objectPixelX)))
+                ) >> (7 - (uint8_t)objectPixelX);
+
+                enum Color objectPixelColor;
+                bool isNotTransparent = get_object_palette_color(ppu, obj->palette, objectColorNumber, &objectPixelColor);
+                if (isNotTransparent)
+                {
+                    // TODO: object/BG priority
+                    pixelColor = objectPixelColor;
+                }
+            }
+        }
 
         uint8_t r;
         uint8_t g;

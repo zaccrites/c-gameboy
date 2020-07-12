@@ -7,6 +7,7 @@
 struct InputState input_get_state(void)
 {
     bool quit = false;
+    bool dumpMemory = false;
 
     SDL_Event event;
     while (SDL_PollEvent(&event))
@@ -23,16 +24,24 @@ struct InputState input_get_state(void)
             case SDLK_q:
                 quit = true;
                 break;
+            case SDLK_m:
+                if ( ! event.key.repeat)
+                {
+                    dumpMemory = true;
+                }
+                break;
             default:
                 break;
             }
         }
     }
 
-    // Note: MUST process events before calling SDL_KeyKeyboardState()
+    // Note: Must process events before calling SDL_GetKeyboardState()
+    //       in order to get up-to-date keyboard state.
     const uint8_t *keystate = SDL_GetKeyboardState(NULL);
     struct InputState inputState = {
         .quit = quit,
+        .dumpMemory = dumpMemory,
 
         .buttonA = keystate[SDL_SCANCODE_S],
         .buttonB = keystate[SDL_SCANCODE_A],

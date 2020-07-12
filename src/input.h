@@ -9,6 +9,7 @@ struct InputState
 {
     // Emulator controls
     bool quit;
+    bool dumpMemory;
 
     // GameBoy controls
     bool buttonA;
