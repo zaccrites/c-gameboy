@@ -34,21 +34,19 @@ void keypad_init(struct Keypad *keypad, struct Memory *memory)
 }
 
 
-void keypad_tick(struct Keypad *keypad, struct Cpu *cpu)
+void keypad_tick(struct Keypad *keypad, struct Cpu *cpu, struct InputState *inputState)
 {
-    struct InputState inputState = input_get_state();
+    bool dpadSelected = (keypad->p1 & (1 << 5)) != 0;
+    bool dpadRight = dpadSelected && inputState->dpadRight;
+    bool dpadLeft = dpadSelected && inputState->dpadLeft;
+    bool dpadUp = dpadSelected && inputState->dpadUp;
+    bool dpadDown = dpadSelected && inputState->dpadDown;
 
-    bool dpadSelected = (keypad->p1 & (1 << 4)) != 0;
-    bool dpadRight = dpadSelected && inputState.dpadRight;
-    bool dpadLeft = dpadSelected && inputState.dpadLeft;
-    bool dpadUp = dpadSelected && inputState.dpadUp;
-    bool dpadDown = dpadSelected && inputState.dpadDown;
-
-    bool buttonsSelected = (keypad->p1 & (1 << 5)) != 0;
-    bool buttonA = buttonsSelected && inputState.buttonA;
-    bool buttonB = buttonsSelected && inputState.buttonB;
-    bool buttonSelect = buttonsSelected && inputState.buttonSelect;
-    bool buttonStart = buttonsSelected && inputState.buttonStart;
+    bool buttonsSelected = (keypad->p1 & (1 << 4)) != 0;
+    bool buttonA = buttonsSelected && inputState->buttonA;
+    bool buttonB = buttonsSelected && inputState->buttonB;
+    bool buttonSelect = buttonsSelected && inputState->buttonSelect;
+    bool buttonStart = buttonsSelected && inputState->buttonStart;
 
     uint8_t outputBitsBefore = keypad->p1 & 0x0f;
     keypad->p1 |= 0x0f;

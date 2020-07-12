@@ -58,6 +58,8 @@ int main(int argc, char **argv)
     struct Keypad keypad;
     keypad_init(&keypad, &memory);
 
+    struct InputState inputState = input_get_state();
+
     bool isRunning = true;
     while (isRunning)
     {
@@ -67,25 +69,27 @@ int main(int argc, char **argv)
             isRunning = false;
         }
         int instructionCycles = 1;  // TODO: accurate number of cycles for each instruction
+        keypad_tick(&keypad, &cpu, &inputState);
+        dma_tick(&dma, instructionCycles);
         bool enteringVBlank = ppu_tick(&ppu, &cpu, instructionCycles, graphics.pixelBuffer);
+
+        inputState = input_get_state();
+        if (inputState.quit)
+        {
+            isRunning = false;
+        }
+        if (inputState.buttonSelect)
+        {
+            FILE *f;
+
+            f = fopen("vram.bin", "wb");
+            fwrite(memory.vram, sizeof(memory.vram[0]), sizeof(memory.vram), f);
+            fclose(f);
+            printf("Wrote contents of VRAM to file \n");
+        }
 
         if (enteringVBlank)
         {
-            struct InputState inputState = input_get_state();
-            if (inputState.quit)
-            {
-                isRunning = false;
-            }
-
-            if (inputState.buttonSelect)
-            {
-                FILE *f = fopen("vram.bin", "wb");
-                fwrite(memory.vram, sizeof(memory.vram[0]), sizeof(memory.vram), f);
-                fclose(f);
-                printf("Wrote contents of VRAM to file \n");
-            }
-
-            keypad_tick(&keypad, &cpu);
             graphics_update(&graphics);
 
             // TODO: Measure elasped time and sleep to achieve 60 FPS.
