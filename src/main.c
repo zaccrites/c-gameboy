@@ -10,6 +10,7 @@
 #include "ppu.h"
 #include "keypad.h"
 #include "dma.h"
+#include "timer.h"
 
 
 void dumpMemory(struct Memory *memory)
@@ -78,6 +79,9 @@ int main(int argc, char **argv)
     struct Dma dma;
     dma_init(&dma, &memory);
 
+    struct Timer timer;
+    timer_init(&timer, &memory);
+
     struct InputState inputState = input_get_state();
 
     bool isRunning = true;
@@ -91,6 +95,7 @@ int main(int argc, char **argv)
         int instructionCycles = 1;  // TODO: accurate number of cycles for each instruction
         keypad_tick(&keypad, &cpu, &inputState);
         dma_tick(&dma, instructionCycles);
+        timer_tick(&timer, instructionCycles);
         bool enteringVBlank = ppu_tick(&ppu, &cpu, instructionCycles, graphics.pixelBuffer);
 
         inputState = input_get_state();
