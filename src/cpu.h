@@ -52,6 +52,7 @@ struct Cpu
     } flags;
 
     bool ime;
+    bool halted;
 
     uint8_t interruptFlags;
     uint8_t interruptEnable;

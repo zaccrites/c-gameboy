@@ -1,5 +1,6 @@
 
 #include <stdio.h>
+#include <string.h>
 #include <assert.h>
 
 #include "cpu.h"
@@ -72,6 +73,7 @@ void cpu_init(struct Cpu *cpu, struct Memory *memory)
     cpu->registers.l = 0x4d;
     cpu->sp = 0xfffe;
     cpu->ime = true;
+    cpu->halted = false;
 
     cpu->interruptFlags = 0x00;  // TODO
     cpu->interruptEnable = 0x00;  // TODO
@@ -155,14 +157,15 @@ void cpu_write_double_reg(struct Cpu *cpu, enum CpuDoubleRegister reg, uint16_t 
 
 void cpu_push_dword(struct Cpu *cpu, uint16_t value)
 {
-    memory_write_dword(cpu->memory, cpu->sp, value);
     cpu->sp -= 2;
+    memory_write_dword(cpu->memory, cpu->sp, value);
 }
 
 uint16_t cpu_pop_dword(struct Cpu *cpu)
 {
+    uint16_t value = memory_read_dword(cpu->memory, cpu->sp);
     cpu->sp += 2;
-    return memory_read_dword(cpu->memory, cpu->sp);
+    return value;
 }
 
 
@@ -245,9 +248,15 @@ bool cpu_execute_next(struct Cpu *cpu)
             bool interruptEnabled = cpu->interruptEnable & (1 << (uint8_t)interrupt);
             if (interruptRequested && interruptEnabled)
             {
+                cpu->halted = false;
                 return handle_interrupt(cpu, interrupt);
             }
         }
+    }
+
+    if (cpu->halted)
+    {
+        return true;
     }
 
 
@@ -279,6 +288,7 @@ bool cpu_execute_next(struct Cpu *cpu)
     cpu->pc += (opcode == 0xcb) ? 2 : 1;
 
     static bool tracing = false;
+    // tracing = true;
     if (tracing || isUnimplementedInstruction)
     {
         // TODO: Move this outside the CPU and have it also print stuff related to

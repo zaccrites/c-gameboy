@@ -1,4 +1,6 @@
 
+#include <stddef.h>
+
 #include "cpu_instructions.h"
 #include "cpu.h"
 #include "memory.h"
@@ -67,6 +69,16 @@ static void ei(struct Cpu *cpu)
 {
     // TODO: Wait to enable interrupts until the next instruction completes
     cpu->ime = true;
+}
+
+static void halt(struct Cpu *cpu)
+{
+    // TODO: Skip instruction following the HALT instruction if interrupts
+    //   are disabled?
+    if (cpu->ime)
+    {
+        cpu->halted = true;
+    }
 }
 
 
@@ -214,6 +226,29 @@ static void ld_de_d16(struct Cpu *cpu) { cpu_write_double_reg(cpu, CPU_DOUBLE_RE
 static void ld_hl_d16(struct Cpu *cpu) { cpu_write_double_reg(cpu, CPU_DOUBLE_REG_HL, imm_dword(cpu)); }
 
 static void ld_sp_hl(struct Cpu *cpu) { cpu->sp = cpu_read_double_reg(cpu, CPU_DOUBLE_REG_HL); }
+
+
+
+static uint16_t add_signed_word_to_dword(struct Cpu *cpu, uint16_t dword, int16_t word)
+{
+    uint16_t total = (int32_t)dword + (int32_t)word;
+    uint16_t tmp = dword ^ (uint16_t)word ^ total;
+    cpu->flags.zero = false;
+    cpu->flags.negative = false;
+    cpu->flags.halfCarry = (tmp & 0x10) == 0x10;
+    cpu->flags.carry = (tmp & 0x100) == 0x100;
+    return total;
+}
+
+static void ld_hl_sp_plus_r(struct Cpu *cpu)
+{
+    uint16_t hl = add_signed_word_to_dword(cpu, cpu->sp, imm_word(cpu));
+    cpu_write_double_reg(cpu, CPU_DOUBLE_REG_HL, hl);
+}
+static void add_sp_r(struct Cpu *cpu)
+{
+    cpu->sp = add_signed_word_to_dword(cpu, cpu->sp, imm_word(cpu));
+}
 
 
 
@@ -398,6 +433,11 @@ static void ld_hl_e(struct Cpu *cpu) { write_mem_at_hl(cpu, cpu->registers.e); }
 static void ld_hl_h(struct Cpu *cpu) { write_mem_at_hl(cpu, cpu->registers.h); }
 static void ld_hl_l(struct Cpu *cpu) { write_mem_at_hl(cpu, cpu->registers.l); }
 
+static void ld_a_mem_c(struct Cpu *cpu)
+{
+    cpu->registers.a = memory_read_word(cpu->memory, 0xff00 + cpu->registers.c);
+}
+
 
 static void and(struct Cpu *cpu, uint8_t value)
 {
@@ -568,22 +608,35 @@ static void cpl(struct Cpu *cpu)
 
 static void daa(struct Cpu *cpu)
 {
-    uint8_t nibble1 = cpu->registers.a & 0x0f;
-    if ((nibble1 > 9)  || cpu->flags.halfCarry)
+    if ( ! cpu->flags.negative)
     {
-        cpu->registers.a += 0x06;
-    }
+        if (cpu->flags.carry || cpu->registers.a > 0x99)
+        {
+            cpu->registers.a += 0x60;
+            cpu->flags.carry = true;
+        }
 
-    bool doSecondAddition = (cpu->registers.a & 0xf0) > 0x90 || cpu->flags.carry;
-    if (doSecondAddition)
+        if (cpu->flags.halfCarry || (cpu->registers.a & 0x0f) > 0x09)
+        {
+            cpu->registers.a += 0x06;
+            cpu->flags.halfCarry = false;
+        }
+    }
+    else if (cpu->flags.carry && cpu->flags.halfCarry)
     {
-        cpu->registers.a += 0x60;
+        cpu->registers.a += 0x9a;
+        cpu->flags.halfCarry = false;
     }
-
+    else if (cpu->flags.carry)
+    {
+        cpu->registers.a += 0xa0;
+    }
+    else if (cpu->flags.halfCarry)
+    {
+        cpu->registers.a += 0xfa;
+        cpu->flags.halfCarry = false;
+    }
     cpu->flags.zero = cpu->registers.a == 0;
-    // negative flag not affected
-    cpu->flags.halfCarry = false;
-    cpu->flags.carry = doSecondAddition;
 }
 
 
@@ -1160,7 +1213,7 @@ const struct Instruction instructions[256] = {
     { "LD (HL), E",      0, ld_hl_e },
     { "LD (HL), H",      0, ld_hl_h },
     { "LD (HL), L",      0, ld_hl_l },
-    { "HALT",            0, NULL },
+    { "HALT",            0, halt },
     { "LD (HL), A",      0, ld_hl_a },
     { "LD A, B",         0, ld_a_b },
     { "LD A, C",         0, ld_a_c },
@@ -1288,7 +1341,7 @@ const struct Instruction instructions[256] = {
     { "PUSH HL",         0, push_hl },
     { "AND 0x%02x",      1, and_d8 },
     { "RST 0x20",        0, rst20 },
-    { "ADD SP, %hhd",    1, NULL },
+    { "ADD SP, %hhd",    1, add_sp_r },
     { "JP (HL)",         0, jp_hl },
     { "LD (0x%04x), A",  2, ld_mem_a16_a },
     { "<undocumented>",  0, NULL },
@@ -1300,13 +1353,13 @@ const struct Instruction instructions[256] = {
     // 0xf0
     { "LDH A, (0x%02x)", 1, ldh_a_a8 },
     { "POP AF",          0, pop_af },
-    { "LD A, (C)",       0, NULL },
+    { "LD A, (C)",       0, ld_a_mem_c },
     { "DI",              0, di },
     { "<undocumented>",  0, NULL },
     { "PUSH AF",         0, push_af },
     { "OR 0x%02x",       1, or_d8 },
     { "RST 0x30",        0, rst30 },
-    { "LD HL, SP%+d",    1, NULL },
+    { "LD HL, SP%+d",    1, ld_hl_sp_plus_r },
     { "LD SP, HL",       0, ld_sp_hl },
     { "LD A, (0x%04x)",  2, ld_a_mem_a16 },
     { "EI",              0, ei },
