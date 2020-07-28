@@ -4,17 +4,23 @@
 #include <stdio.h>
 
 #include "memory.h"
+#include "cartridge.h"
+
+
+// TODO: For ROM and RAM, use a "decode-to-pointer" style function
+//   avoid repeating MBC logic?
 
 
 uint8_t memory_read_word(struct Memory *memory, uint16_t address)
 {
     if (address <= MEMORY_ROM_BANK0_END)
     {
-        return memory->romBank0[address - MEMORY_ROM_BANK0_START];
+        return memory->rom[address - MEMORY_ROM_BANK0_START];
     }
-    else if (address <= MEMORY_ROM_BANK1_END)
+    else if (address <= MEMORY_ROM_BANKN_END)
     {
-        return memory->romBank1[address - MEMORY_ROM_BANK1_START];
+        size_t romBankOffset = memory->selectedRomBank * MEMORY_ROM_BANK_SIZE;
+        return memory->rom[address - MEMORY_ROM_BANKN_START + romBankOffset];
     }
     else if (address <= MEMORY_VRAM_END)
     {
@@ -63,15 +69,37 @@ uint8_t memory_read_word(struct Memory *memory, uint16_t address)
 }
 
 
+static void handle_rom_write(struct Memory *memory, uint16_t address, uint8_t value)
+{
+    if (memory->cartridgeType & CARTRIDGE_TYPE_MBC1)
+    {
+        // TODO
+        (void)address;
+        (void)value;
+        printf("Wrote 0x%02x to ROM address: 0x%04x \n", value, address);
+        // assert(false);
+
+        // TODO: Do this properly. This is wrong.
+        if (address >= 0x2000 && address <= 0x3fff)
+        {
+            memory->selectedRomBank = value & 0x1f;
+            if (memory->selectedRomBank < 1)
+            {
+                memory->selectedRomBank = 1;
+            }
+
+            printf("Selected ROM bank %ld \n", memory->selectedRomBank);
+        }
+
+    }
+}
+
+
 void memory_write_word(struct Memory *memory, uint16_t address, uint8_t value)
 {
-    if (address <= MEMORY_ROM_BANK0_END)
+    if (address <= MEMORY_ROM_BANKN_END)
     {
-        memory->romBank0[address - MEMORY_ROM_BANK0_START] = value;
-    }
-    else if (address <= MEMORY_ROM_BANK1_END)
-    {
-        memory->romBank1[address - MEMORY_ROM_BANK1_START] = value;
+        handle_rom_write(memory, address, value);
     }
     else if (address <= MEMORY_VRAM_END)
     {
@@ -143,9 +171,17 @@ void memory_write_dword(struct Memory *memory, uint16_t address, uint16_t value)
 
 bool memory_init(struct Memory *memory, struct Cartridge *cartridge)
 {
-    assert(cartridge->dataSize == MEMORY_ROM_BANK0_SIZE + MEMORY_ROM_BANK1_SIZE);
-    memcpy(memory->romBank0, &cartridge->data[MEMORY_ROM_BANK0_START], MEMORY_ROM_BANK0_SIZE);
-    memcpy(memory->romBank1, &cartridge->data[MEMORY_ROM_BANK1_START], MEMORY_ROM_BANK1_SIZE);
+    memcpy(memory->rom, cartridge->data, cartridge->dataSize);
+    memory->selectedRomBank = 1;
+    memory->selectedExternalRamBank = 0;
+    for (size_t i = 0; i < MEMORY_MAX_EXTERNAL_RAM_BANKS; i++)
+    {
+        memory->externalRamBankEnable[i] = false;
+    }
+
+    struct CartridgeHeader cartridgeHeader;
+    cartridge_get_header(cartridge, &cartridgeHeader);
+    memory->cartridgeType = cartridgeHeader.type;
 
     for (size_t i = 0; i < MEMORY_IO_SIZE; i++)
     {

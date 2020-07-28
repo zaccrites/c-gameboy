@@ -3,19 +3,23 @@
 #define MEMORY_H
 
 #include <stdint.h>
+#include <stddef.h>
 #include <stdbool.h>
 
-#include "cartridge.h"
+struct Cartridge;
+
+
+#define MEMORY_MAX_ROM_BANKS           128
+#define MEMORY_MAX_EXTERNAL_RAM_BANKS  16
 
 
 // In cartridge, fixed
 #define MEMORY_ROM_BANK0_START     0x0000
-#define MEMORY_ROM_BANK0_SIZE      0x4000
-#define MEMORY_ROM_BANK0_END       (MEMORY_ROM_BANK0_START + MEMORY_ROM_BANK0_SIZE - 1)
+#define MEMORY_ROM_BANK_SIZE       0x4000
+#define MEMORY_ROM_BANK0_END       (MEMORY_ROM_BANK0_START + MEMORY_ROM_BANK_SIZE - 1)
 // In cartridge, switchable
-#define MEMORY_ROM_BANK1_START     0x4000
-#define MEMORY_ROM_BANK1_SIZE      0x4000
-#define MEMORY_ROM_BANK1_END       (MEMORY_ROM_BANK1_START + MEMORY_ROM_BANK1_SIZE)
+#define MEMORY_ROM_BANKN_START     0x4000
+#define MEMORY_ROM_BANKN_END       (MEMORY_ROM_BANKN_START + MEMORY_ROM_BANK_SIZE)
 // Switchable bank 0-1 in CGB mode
 #define MEMORY_VRAM_START          0x8000
 #define MEMORY_VRAM_SIZE           0x2000
@@ -26,12 +30,11 @@
 #define MEMORY_EXTERNAL_RAM_END    (MEMORY_EXTERNAL_RAM_START + MEMORY_EXTERNAL_RAM_SIZE - 1)
 // Internal RAM, fixed
 #define MEMORY_WRAM_BANK0_START    0xc000
-#define MEMORY_WRAM_BANK0_SIZE     0x1000
-#define MEMORY_WRAM_BANK0_END      (MEMORY_WRAM_BANK0_START + MEMORY_WRAM_BANK0_SIZE - 1)
+#define MEMORY_WRAM_BANK_SIZE      0x1000
+#define MEMORY_WRAM_BANK0_END      (MEMORY_WRAM_BANK0_START + MEMORY_WRAM_BANK_SIZE - 1)
 // Internal RAM, switchable bank 1-7 in CGB mode
 #define MEMORY_WRAM_BANK1_START    0xd000
-#define MEMORY_WRAM_BANK1_SIZE     0x1000
-#define MEMORY_WRAM_BANK1_END      (MEMORY_WRAM_BANK1_START + MEMORY_WRAM_BANK1_SIZE - 1)
+#define MEMORY_WRAM_BANK1_END      (MEMORY_WRAM_BANK1_START + MEMORY_WRAM_BANK_SIZE - 1)
 // Echo of work RAM
 #define MEMORY_WRAM_ECHO_START     0xe000
 #define MEMORY_WRAM_ECHO_END       0xfdff
@@ -69,12 +72,18 @@ struct IoRegisterHandler
 
 struct Memory
 {
-    uint8_t romBank0[MEMORY_ROM_BANK0_SIZE];
-    uint8_t romBank1[MEMORY_ROM_BANK1_SIZE];
+    uint16_t cartridgeType;
+
+    uint8_t rom[MEMORY_ROM_BANK_SIZE * MEMORY_MAX_ROM_BANKS];
+    size_t selectedRomBank;
+
+    uint8_t externalRam[MEMORY_EXTERNAL_RAM_SIZE * MEMORY_MAX_EXTERNAL_RAM_BANKS];
+    size_t selectedExternalRamBank;
+    bool externalRamBankEnable[MEMORY_MAX_EXTERNAL_RAM_BANKS];
+
     uint8_t vram[MEMORY_VRAM_SIZE];
-    uint8_t externalRam[MEMORY_EXTERNAL_RAM_SIZE];
-    uint8_t wramBank0[MEMORY_WRAM_BANK0_SIZE];
-    uint8_t wramBank1[MEMORY_WRAM_BANK1_SIZE];
+    uint8_t wramBank0[MEMORY_WRAM_BANK_SIZE];
+    uint8_t wramBank1[MEMORY_WRAM_BANK_SIZE];
     uint8_t oam[MEMORY_OAM_SIZE];
     uint8_t highRam[MEMORY_HIGH_RAM_SIZE];
 

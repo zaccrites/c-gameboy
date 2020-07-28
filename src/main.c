@@ -49,7 +49,9 @@ int main(int argc, char **argv)
 
     struct CartridgeHeader cartridgeHeader;
     cartridge_get_header(&cartridge, &cartridgeHeader);
-    printf("Loaded ROM \"%s\" (%ld bytes)\n", cartridgeHeader.title, cartridge.dataSize);
+    char cartridgeTypeStringBuffer[64];
+    cartridge_get_type_string(&cartridgeHeader, cartridgeTypeStringBuffer, sizeof(cartridgeTypeStringBuffer));
+    printf("Loaded ROM \"%s\" (%ld bytes) (%s)\n", cartridgeHeader.title, cartridge.dataSize, cartridgeTypeStringBuffer);
 
     struct Memory memory;
     if ( ! memory_init(&memory, &cartridge))
