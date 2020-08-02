@@ -173,62 +173,81 @@ static void get_color_rgb(enum Color color, uint8_t *r, uint8_t *g, uint8_t *b)
 }
 
 
-#define VRAM_TILE_DATA_INDEX            0
-#define VRAM_TILE_PATTERN_TABLE0_INDEX  VRAM_TILE_DATA_INDEX
-#define VRAM_TILE_PATTERN_TABLE1_INDEX  (VRAM_TILE_DATA_INDEX + 0x0800)
+#define VRAM_TILE_PATTERN_TABLE0_INDEX  0x1000  // signed pattern 0
+#define VRAM_TILE_PATTERN_TABLE1_INDEX  0x0000  // unsigned pattern 0
 
 #define VRAM_TILE_BACKGROUND_MAP0_INDEX 0x1800
 #define VRAM_TILE_BACKGROUND_MAP1_INDEX 0x1c00
 
 
-
+#define BACKGROUND_TILE_WIDTH   8
+#define BACKGROUND_TILE_HEIGHT  8
+#define TILE_GRID_WIDTH         32
+#define TILE_GRID_HEIGHT        32
 
 static void ppu_render_line(struct Ppu *ppu, uint8_t *pixelBuffer)
 {
+    // TODO: window
+
     struct Object objects[MAX_OBJECTS_PER_LINE];
     size_t numObjectsOnLine = oam_search(ppu, objects);
-    if (numObjectsOnLine > 0)
-    {
-        // printf("Found %lu objects on line %u \n", numObjectsOnLine, ppu->currentLine);
-        // printf("   object[0].y = %u \n", objects[0].y);
-    }
-    else
-    {
-        // return;
-    }
     qsort(objects, numObjectsOnLine, sizeof(struct Object), object_object_render_sorting);
 
+    // Find the effective Y-coordinate for this scan line.
+    // From that, find the associated Y-coordinate for the tile grid,
+    // as well as the pixel Y-coordinate for the tile for this scanline.
     uint8_t y0 = ppu->currentLine;
     uint8_t y = y0 + ppu->scrollY;
-    size_t tileCoordY = y / 8;
-    size_t tilePixelCoordY = y % 8;
+    size_t tileCoordY = y / BACKGROUND_TILE_HEIGHT;
+    size_t tilePixelCoordY = y % BACKGROUND_TILE_HEIGHT;
 
     for (uint8_t x0 = 0; x0 < LCD_WIDTH; x0++)
     {
+        // Similarly, find the effective X-coordinate for this pixel, etc.
         uint8_t x = x0 + ppu->scrollX;
-        size_t tileCoordX = x / 8;
-        size_t tilePixelCoordX = x % 8;
+        size_t tileCoordX = x / BACKGROUND_TILE_WIDTH;
+        size_t tilePixelCoordX = x % BACKGROUND_TILE_WIDTH;
 
-        // tileIndex is the sequential tile number starting from the top left at 0 and ending at the bottom right at 1023 (32x32 - 1)
-        size_t tileIndex = (tileCoordY * 32) + tileCoordX;
-        // This is used as an index into VRAM to obtain the desired tile pattern number to draw for that tile
-        size_t tilePatternIndex = ppu->memory->vram[VRAM_TILE_BACKGROUND_MAP0_INDEX + tileIndex];  // TODO: other tile map
-        // This number can then be used to look into a different part of VRAM to get the actual tile data
-        uint8_t *tilePixelData = &ppu->memory->vram[16 * tilePatternIndex];
-        uint8_t *tileLinePixelData = tilePixelData + 2 * tilePixelCoordY;
-        uint8_t tileByte0 = tileLinePixelData[0];
-        uint8_t tileByte1 = tileLinePixelData[1];
+        // Once we have the tile grid XY-coordinates,
+        // we can identify the tile grid index for this pixel's tile
+        // (starting with zero at the top-left,
+        // increasing from left-to-right and top-to-bottom).
+        size_t tileIndex = (tileCoordY * TILE_GRID_WIDTH) + tileCoordX;
 
+        // Select the desired tile data pattern table.
+        uint8_t *tilePatternTable = &ppu->memory->vram[
+            ppu->backgroundAndWindowTileDataSelect
+                ? VRAM_TILE_PATTERN_TABLE1_INDEX
+                : VRAM_TILE_PATTERN_TABLE0_INDEX
+        ];
+
+        // Find the tile pattern of interest
+        uint8_t *tilePattern;
+        if (ppu->backgroundTileMapSelect)
+        {
+            uint8_t *tileMap = &ppu->memory->vram[VRAM_TILE_BACKGROUND_MAP1_INDEX];
+            uint8_t tilePatternNumber = tileMap[tileIndex];
+            tilePattern = &tilePatternTable[tilePatternNumber * (2 * BACKGROUND_TILE_WIDTH)];
+        }
+        else
+        {
+            int8_t *tileMap = (int8_t*)&ppu->memory->vram[VRAM_TILE_BACKGROUND_MAP0_INDEX];
+            int8_t tilePatternNumber = tileMap[tileIndex];
+            tilePattern = &tilePatternTable[tilePatternNumber * (2 * BACKGROUND_TILE_WIDTH)];
+        }
+
+        // Get the tile pattern line of interest,
+        // and the color number of the pixel of interest.
+        uint8_t *tilePatternLine = tilePattern + 2 * tilePixelCoordY;
         uint8_t backgroundColorNumber = (
-                ((tileByte0 & (1 << (7 - tilePixelCoordX))) << 1) |
-                (tileByte1 & (1 << (7 - tilePixelCoordX)))
+            ((tilePatternLine[1] & (1 << (7 - tilePixelCoordX))) << 1) |
+            (tilePatternLine[0] & (1 << (7 - tilePixelCoordX)))
         ) >> (7 - tilePixelCoordX);
         enum Color pixelColor = get_background_palette_color(ppu, backgroundColorNumber);
 
 
 
-
-        // TODO: Sprite/BG priority
+        // TODO: clean up sprite code
         // TODO: 8x16 mode tile selection
 
         // Now look at the objects for this pixel
@@ -251,16 +270,16 @@ static void ppu_render_line(struct Ppu *ppu, uint8_t *pixelBuffer)
             {
                 // printf("OBJ[%lu] visible at screen pixel (%u,%u) showing tile pixel (%d,%d) \n", i, x0, y0, objectPixelX, objectPixelY);
 
-                tilePatternIndex = obj->patternIndex;
-                tilePixelData = &ppu->memory->vram[16 * tilePatternIndex];  // TODO: may need to change this for 8x16 sprites
-                tileLinePixelData = tilePixelData + 2 * (uint8_t)objectPixelY;
-                tileByte0 = tileLinePixelData[0];
-                tileByte1 = tileLinePixelData[1];
+                size_t tilePatternIndex = obj->patternIndex;
+                uint8_t *tilePixelData = &ppu->memory->vram[16 * tilePatternIndex];  // TODO: may need to change this for 8x16 sprites
+                uint8_t *tileLinePixelData = tilePixelData + 2 * (uint8_t)objectPixelY;
+                uint8_t tileByte0 = tileLinePixelData[0];
+                uint8_t tileByte1 = tileLinePixelData[1];
 
                 // TODO: xFlip and yFlip
                 uint8_t objectColorNumber = (
-                        ((tileByte0 & (1 << (7 - (uint8_t)objectPixelX))) << 1) |
-                        (tileByte1 & (1 << (7 - (uint8_t)objectPixelX)))
+                        ((tileByte1 & (1 << (7 - (uint8_t)objectPixelX))) << 1) |
+                        (tileByte0 & (1 << (7 - (uint8_t)objectPixelX)))
                 ) >> (7 - (uint8_t)objectPixelX);
 
                 enum Color objectPixelColor;
@@ -273,9 +292,8 @@ static void ppu_render_line(struct Ppu *ppu, uint8_t *pixelBuffer)
             }
         }
 
-        uint8_t r;
-        uint8_t g;
-        uint8_t b;
+
+        uint8_t r, g, b;
         get_color_rgb(pixelColor, &r, &g, &b);
 
         size_t i = y0 * LCD_WIDTH + x0;
@@ -298,6 +316,8 @@ static void ppu_render_line(struct Ppu *ppu, uint8_t *pixelBuffer)
 
 bool ppu_tick(struct Ppu *ppu, struct Cpu *cpu, int cycles, uint8_t *pixelBuffer)
 {
+    // TODO: LCD disabled? Would have to blank the whole screen.
+
     bool enteringVBlank = false;
 
     // Advance the line or pixel count, update VRAM/OAM lock state, etc.
@@ -463,9 +483,9 @@ static uint8_t io_handler_read_background_palette(IoRegisterFuncContext context)
     struct Ppu *ppu = context;
     uint8_t value = 0;
     value |= (uint8_t)ppu->backgroundPalette[3] << 6;
-    value |= (uint8_t)ppu->backgroundPalette[3] << 4;
-    value |= (uint8_t)ppu->backgroundPalette[3] << 2;
-    value |= (uint8_t)ppu->backgroundPalette[3] << 0;
+    value |= (uint8_t)ppu->backgroundPalette[2] << 4;
+    value |= (uint8_t)ppu->backgroundPalette[1] << 2;
+    value |= (uint8_t)ppu->backgroundPalette[0] << 0;
     return value;
 }
 static void io_handler_write_background_palette(IoRegisterFuncContext context, uint8_t value)
