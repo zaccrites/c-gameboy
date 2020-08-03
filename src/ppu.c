@@ -268,19 +268,18 @@ static void ppu_render_line(struct Ppu *ppu, uint8_t *pixelBuffer)
             int16_t objectPixelX = ((int16_t)x0 - obj->x) + objectWidth;
             if (objectPixelX >= 0 && objectPixelX < 8)
             {
-                // printf("OBJ[%lu] visible at screen pixel (%u,%u) showing tile pixel (%d,%d) \n", i, x0, y0, objectPixelX, objectPixelY);
-
                 size_t tilePatternIndex = obj->patternIndex;
                 uint8_t *tilePixelData = &ppu->memory->vram[16 * tilePatternIndex];  // TODO: may need to change this for 8x16 sprites
-                uint8_t *tileLinePixelData = tilePixelData + 2 * (uint8_t)objectPixelY;
+                uint8_t *tileLinePixelData = tilePixelData + 2 * (uint8_t)(obj->yFlip ? (7 - objectPixelY) : objectPixelY);  // TODO: may need to change this for 8x16 sprites
                 uint8_t tileByte0 = tileLinePixelData[0];
                 uint8_t tileByte1 = tileLinePixelData[1];
 
-                // TODO: xFlip and yFlip
+                // TODO: clean up, combine with BG version of this
+                uint8_t xShift = obj->xFlip ? objectPixelX : (7 - objectPixelX);
                 uint8_t objectColorNumber = (
-                        ((tileByte1 & (1 << (7 - (uint8_t)objectPixelX))) << 1) |
-                        (tileByte0 & (1 << (7 - (uint8_t)objectPixelX)))
-                ) >> (7 - (uint8_t)objectPixelX);
+                        ((tileByte1 & (1 << xShift)) << 1) |
+                        (tileByte0 & (1 << xShift))
+                ) >> xShift;
 
                 enum Color objectPixelColor;
                 bool isNotTransparent = get_object_palette_color(ppu, obj->palette, objectColorNumber, &objectPixelColor);
