@@ -284,9 +284,8 @@ static void ppu_render_line(struct Ppu *ppu, uint8_t *pixelBuffer)
 
                 enum Color objectPixelColor;
                 bool isNotTransparent = get_object_palette_color(ppu, obj->palette, objectColorNumber, &objectPixelColor);
-                if (isNotTransparent)
+                if (isNotTransparent && ! obj->priority)
                 {
-                    // TODO: object/BG priority
                     pixelColor = objectPixelColor;
                 }
             }
