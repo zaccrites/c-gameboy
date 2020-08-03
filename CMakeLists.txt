@@ -50,6 +50,10 @@ target_compile_options(emulator PRIVATE
     -Wunreachable-code
 )
 
+target_compile_definitions(emulator PRIVATE
+    LCD_GRAY=1
+)
+
 target_link_libraries(emulator
     ${SDL2_LIBRARIES}
 )
