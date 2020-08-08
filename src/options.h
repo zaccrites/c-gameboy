@@ -9,6 +9,7 @@ struct Options
 {
     const char *romPath;
     struct GraphicsOptions graphics;
+    bool exitEarly;
 };
 
 

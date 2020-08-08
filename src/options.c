@@ -11,8 +11,20 @@ static bool starts_with(const char* string, const char* prefix)
 }
 
 
+static void print_help(void)
+{
+    fprintf(stderr,
+        "Usage: emulator <rom_path> [...options] \n"
+        "  rom_path : Path to GameBoy ROM .gb file \n"
+        "\n"
+        "  --small  : Size display window accurate to a real GameBoy LCD (it is shown 4x wider and taller by default) \n"
+    );
+}
+
+
 int parse_options(int argc, char **argv, struct Options *options)
 {
+    options->exitEarly = false;
     options->romPath = NULL;
     options->graphics.smallWindow = false;
 
@@ -25,9 +37,16 @@ int parse_options(int argc, char **argv, struct Options *options)
             {
                 options->graphics.smallWindow = true;
             }
+            else if (strcmp(arg, "--help") == 0)
+            {
+                options->exitEarly = true;
+                print_help();
+                return 0;
+            }
             else
             {
                 fprintf(stderr, "error: unknown option %s \n", arg);
+                print_help();
                 return 1;
             }
         }
@@ -43,6 +62,7 @@ int parse_options(int argc, char **argv, struct Options *options)
     if (options->romPath == NULL)
     {
         fprintf(stderr, "error: please provide path to ROM file \n");
+        print_help();
         return 1;
     }
 

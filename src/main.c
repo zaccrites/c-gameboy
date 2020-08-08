@@ -34,7 +34,7 @@ int main(int argc, char **argv)
 {
     struct Options options;
     int statusCode = parse_options(argc, argv, &options);
-    if (statusCode != 0)
+    if (statusCode != 0 || options.exitEarly)
     {
         return statusCode;
     }
