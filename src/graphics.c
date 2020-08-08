@@ -10,16 +10,24 @@ void graphics_update(struct Graphics* graphics)
 }
 
 
-bool graphics_init(struct Graphics *graphics)
+bool graphics_init(struct Graphics *graphics, struct GraphicsOptions *options)
 {
     // TODO: Error handling and reporting
+
+    int windowWidth = LCD_WIDTH;
+    int windowHeight = LCD_HEIGHT;
+    if ( ! options->smallWindow)
+    {
+        windowWidth *= 4;
+        windowHeight *= 4;
+    }
 
     graphics->sdlWindow = SDL_CreateWindow(
         "GameBoy Emulator",
         SDL_WINDOWPOS_UNDEFINED,
         SDL_WINDOWPOS_UNDEFINED,
-        WINDOW_WIDTH,
-        WINDOW_HEIGHT,
+        windowWidth,
+        windowHeight,
         SDL_WINDOW_SHOWN
     );
     if (graphics->sdlWindow == NULL)

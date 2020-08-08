@@ -9,8 +9,10 @@
 #include "lcd.h"
 
 
-#define WINDOW_WIDTH   (LCD_WIDTH * 4)
-#define WINDOW_HEIGHT  (LCD_HEIGHT * 4)
+struct GraphicsOptions
+{
+    bool smallWindow;
+};
 
 
 struct Graphics
@@ -22,8 +24,8 @@ struct Graphics
 };
 
 
+bool graphics_init(struct Graphics *graphics, struct GraphicsOptions *options);
 void graphics_update(struct Graphics* graphics);
-bool graphics_init(struct Graphics *graphics);
 void graphics_teardown(struct Graphics *graphics);
 
 

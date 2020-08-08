@@ -8,6 +8,7 @@ find_package(SDL2 REQUIRED)
 
 add_executable(emulator
     src/main.c
+    src/options.c
     src/input.c
     src/graphics.c
     src/cartridge.c

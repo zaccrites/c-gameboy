@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 
+#include "options.h"
 #include "input.h"
 #include "graphics.h"
 #include "cartridge.h"
@@ -31,18 +32,17 @@ void dumpMemory(struct Memory *memory)
 
 int main(int argc, char **argv)
 {
-    if (argc < 2)
+    struct Options options;
+    int statusCode = parse_options(argc, argv, &options);
+    if (statusCode != 0)
     {
-        fprintf(stderr, "Error: please provide path to ROM file \n");
-        return 1;
+        return statusCode;
     }
-
-    int statusCode = 0;
 
     struct Cartridge cartridge;
     if ( ! cartridge_load(&cartridge, argv[1]))
     {
-        fprintf(stderr, "Error: Failed to load the cartridge! \n");
+        fprintf(stderr, "error: failed to load the cartridge! \n");
         statusCode = 1;
         goto cleanup_cartridge;
     }
@@ -56,15 +56,15 @@ int main(int argc, char **argv)
     struct Memory memory;
     if ( ! memory_init(&memory, &cartridge))
     {
-        fprintf(stderr, "Error: Failed to create the memory mapper! \n");
+        fprintf(stderr, "error: failed to create the memory mapper! \n");
         statusCode = 1;
         goto cleanup_memory;
     }
 
     struct Graphics graphics;
-    if ( ! graphics_init(&graphics))
+    if ( ! graphics_init(&graphics, &options.graphics))
     {
-        fprintf(stderr, "Error: Failed to start the graphics! \n");
+        fprintf(stderr, "error: failed to start the graphics! \n");
         statusCode = 1;
         goto cleanup_graphics;
     }
