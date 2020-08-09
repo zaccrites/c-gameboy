@@ -17,7 +17,9 @@ static void print_help(void)
         "Usage: emulator <rom_path> [...options] \n"
         "  rom_path : Path to GameBoy ROM .gb file \n"
         "\n"
+        "Options: \n"
         "  --small  : Size display window accurate to a real GameBoy LCD (it is shown 4x wider and taller by default) \n"
+        "  --help   : Display this message and quit \n"
     );
 }
 
