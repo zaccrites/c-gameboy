@@ -14,7 +14,7 @@
 #include "timer.h"
 
 
-void dumpMemory(struct Memory *memory)
+void dump_memory(struct Memory *memory)
 {
     FILE *f;
 
@@ -97,7 +97,7 @@ int main(int argc, char **argv)
         int instructionCycles = 1;  // TODO: accurate number of cycles for each instruction
         keypad_tick(&keypad, &cpu, &inputState);
         dma_tick(&dma, instructionCycles);
-        timer_tick(&timer, instructionCycles);
+        timer_tick(&timer, &cpu, instructionCycles);
         bool enteringVBlank = ppu_tick(&ppu, &cpu, instructionCycles, graphics.pixelBuffer);
 
         inputState = input_get_state();
@@ -107,7 +107,7 @@ int main(int argc, char **argv)
         }
         if (inputState.dumpMemory)
         {
-            dumpMemory(&memory);
+            dump_memory(&memory);
         }
 
         if (enteringVBlank)
