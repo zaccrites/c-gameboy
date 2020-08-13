@@ -8,6 +8,7 @@
 struct Options
 {
     const char *romPath;
+    const char *serialOutPath;
     struct GraphicsOptions graphics;
     bool exitEarly;
 };

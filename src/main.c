@@ -12,6 +12,7 @@
 #include "keypad.h"
 #include "dma.h"
 #include "timer.h"
+#include "serial.h"
 
 
 void dump_memory(struct Memory *memory)
@@ -84,7 +85,17 @@ int main(int argc, char **argv)
     struct Timer timer;
     timer_init(&timer, &memory);
 
+    struct Serial serial;
+    serial_init(&serial, &memory);
+
     struct InputState inputState = input_get_state();
+
+    // TODO: Clean this up
+    FILE *serialLogFile = NULL;
+    if (options.serialOutPath != NULL)
+    {
+        serialLogFile = fopen(options.serialOutPath, "wb");
+    }
 
     bool isRunning = true;
     while (isRunning)
@@ -98,7 +109,13 @@ int main(int argc, char **argv)
         keypad_tick(&keypad, &cpu, &inputState);
         dma_tick(&dma, instructionCycles);
         timer_tick(&timer, &cpu, instructionCycles);
+        bool serialTransferComplete = serial_tick(&serial, &cpu, instructionCycles);
         bool enteringVBlank = ppu_tick(&ppu, &cpu, instructionCycles, graphics.pixelBuffer);
+
+        if (serialTransferComplete && serialLogFile != NULL)
+        {
+            fwrite(&serial.outgoingData, sizeof(serial.outgoingData), 1, serialLogFile);
+        }
 
         inputState = input_get_state();
         if (inputState.quit)

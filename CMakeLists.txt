@@ -19,6 +19,7 @@ add_executable(emulator
     src/keypad.c
     src/dma.c
     src/timer.c
+    src/serial.c
 )
 
 target_compile_options(emulator PRIVATE
