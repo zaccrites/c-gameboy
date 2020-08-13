@@ -40,6 +40,18 @@ int main(int argc, char **argv)
         return statusCode;
     }
 
+    // TODO: Clean this up
+    FILE *serialLogFile = NULL;
+    if (options.serialOutPath != NULL)
+    {
+        serialLogFile = fopen(options.serialOutPath, "wb");
+        if (serialLogFile == NULL)
+        {
+            fprintf(stderr, "error: failed to open serial log file \n");
+            goto cleanup_serial;
+        }
+    }
+
     struct Cartridge cartridge;
     if ( ! cartridge_load(&cartridge, argv[1]))
     {
@@ -90,13 +102,6 @@ int main(int argc, char **argv)
 
     struct InputState inputState = input_get_state();
 
-    // TODO: Clean this up
-    FILE *serialLogFile = NULL;
-    if (options.serialOutPath != NULL)
-    {
-        serialLogFile = fopen(options.serialOutPath, "wb");
-    }
-
     bool isRunning = true;
     while (isRunning)
     {
@@ -142,6 +147,11 @@ cleanup_memory:
     memory_teardown(&memory);
 cleanup_cartridge:
     cartridge_teardown(&cartridge);
+cleanup_serial:
+    if (serialLogFile != NULL)
+    {
+        fclose(serialLogFile);
+    }
 
     return statusCode;
 }

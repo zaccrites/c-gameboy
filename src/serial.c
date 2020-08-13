@@ -121,29 +121,3 @@ bool serial_tick(struct Serial *serial, struct Cpu *cpu, int cycles)
     }
     return transferComplete;
 }
-
-
-/*
-06-ld r,r
-
-A FF 30
-A FF 36
-A FF 2D
-A FF 6C
-A FF 64
-A FF 20
-A FF 72
-A FF 2C
-A FF 72
-A FF 0A
-A FF 0A
-A FF 0A
-A FF 50
-A FF 61
-A FF 73
-A FF 73
-A FF 65
-A FF 64
-A FF 0A
-
-*/
