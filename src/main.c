@@ -15,7 +15,7 @@
 #include "serial.h"
 
 
-void dump_memory(struct Memory *memory)
+static void dump_memory(struct Memory *memory)
 {
     FILE *f;
 
@@ -31,6 +31,26 @@ void dump_memory(struct Memory *memory)
 }
 
 
+static FILE* open_serial_log_file(struct Options *options)
+{
+    FILE *file = NULL;
+    if (options->serialOutPath != NULL)
+    {
+        file = fopen(options->serialOutPath, "wb");
+    }
+    return file;
+}
+
+
+static void teardown_serial_log_file(FILE* file)
+{
+    if (file != NULL)
+    {
+        fclose(file);
+    }
+}
+
+
 int main(int argc, char **argv)
 {
     struct Options options;
@@ -40,16 +60,12 @@ int main(int argc, char **argv)
         return statusCode;
     }
 
-    // TODO: Clean this up
-    FILE *serialLogFile = NULL;
-    if (options.serialOutPath != NULL)
+    FILE *serialLogFile = open_serial_log_file(&options);
+    if (serialLogFile == NULL)
     {
-        serialLogFile = fopen(options.serialOutPath, "wb");
-        if (serialLogFile == NULL)
-        {
-            fprintf(stderr, "error: failed to open serial log file \n");
-            goto cleanup_serial;
-        }
+        statusCode = 1;
+        fprintf(stderr, "error: failed to open serial log file \n");
+        goto cleanup_serial;
     }
 
     struct Cartridge cartridge;
@@ -73,6 +89,9 @@ int main(int argc, char **argv)
         statusCode = 1;
         goto cleanup_memory;
     }
+
+    // TODO: Headless mode affects graphics output AND the input system.
+    // Basically we can't use SDL at all.
 
     struct Graphics graphics;
     if ( ! graphics_init(&graphics, &options.graphics))
@@ -148,10 +167,7 @@ cleanup_memory:
 cleanup_cartridge:
     cartridge_teardown(&cartridge);
 cleanup_serial:
-    if (serialLogFile != NULL)
-    {
-        fclose(serialLogFile);
-    }
+    teardown_serial_log_file(serialLogFile);
 
     return statusCode;
 }
