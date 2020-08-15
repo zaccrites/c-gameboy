@@ -1,6 +1,7 @@
 
 #include <stdio.h>
 #include <stdbool.h>
+#include <assert.h>
 
 #include "options.h"
 #include "input.h"
@@ -31,16 +32,11 @@ static void dump_memory(struct Memory *memory)
 }
 
 
-static FILE* open_serial_log_file(struct Options *options)
+static FILE* open_serial_log_file(const char *path)
 {
-    FILE *file = NULL;
-    if (options->serialOutPath != NULL)
-    {
-        file = fopen(options->serialOutPath, "wb");
-    }
-    return file;
+    assert(path != NULL);
+    return fopen(path, "wb");
 }
-
 
 static void teardown_serial_log_file(FILE* file)
 {
@@ -60,12 +56,16 @@ int main(int argc, char **argv)
         return statusCode;
     }
 
-    FILE *serialLogFile = open_serial_log_file(&options);
-    if (serialLogFile == NULL)
+    FILE *serialLogFile = NULL;
+    if (options.serialOutPath != NULL)
     {
-        statusCode = 1;
-        fprintf(stderr, "error: failed to open serial log file \n");
-        goto cleanup_serial;
+        serialLogFile = open_serial_log_file(options.serialOutPath);
+        if (serialLogFile == NULL)
+        {
+            statusCode = 1;
+            fprintf(stderr, "error: failed to open serial log file \n");
+            goto cleanup_serial;
+        }
     }
 
     struct Cartridge cartridge;
