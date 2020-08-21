@@ -107,9 +107,6 @@ int main(int argc, char **argv)
     struct Cpu cpu;
     cpu_init(&cpu, &memory);
 
-    struct Keypad keypad;
-    keypad_init(&keypad, &memory);
-
     struct Dma dma;
     dma_init(&dma, &memory);
 
@@ -119,29 +116,34 @@ int main(int argc, char **argv)
     struct Serial serial;
     serial_init(&serial, &memory);
 
-    struct InputState inputState = input_get_state();
+    struct InputState inputState;
+    input_update(&inputState);
 
+    struct Keypad keypad;
+    keypad_init(&keypad, &inputState, &cpu, &memory);
+
+    uint32_t frameStartTime = SDL_GetTicks();
     bool isRunning = true;
     while (isRunning)
     {
-        // TODO
         if ( ! cpu_execute_next(&cpu))
         {
             isRunning = false;
         }
+
         int instructionCycles = 1;  // TODO: accurate number of cycles for each instruction
-        keypad_tick(&keypad, &cpu, &inputState);
+        keypad_tick(&keypad);
         dma_tick(&dma, instructionCycles);
         timer_tick(&timer, &cpu, instructionCycles);
-        bool serialTransferComplete = serial_tick(&serial, &cpu, instructionCycles);
+
         bool enteringVBlank = ppu_tick(&ppu, &cpu, instructionCycles, graphics.pixelBuffer);
 
+        bool serialTransferComplete = serial_tick(&serial, &cpu, instructionCycles);
         if (serialTransferComplete && serialLogFile != NULL)
         {
             fwrite(&serial.outgoingData, sizeof(serial.outgoingData), 1, serialLogFile);
         }
 
-        inputState = input_get_state();
         if (inputState.quit)
         {
             isRunning = false;
@@ -153,10 +155,22 @@ int main(int argc, char **argv)
 
         if (enteringVBlank)
         {
+            input_update(&inputState);
             graphics_update(&graphics);
 
-            // TODO: Measure elasped time and sleep to achieve 60 FPS.
-            // SDL_Delay(16);
+            uint32_t frameMs = SDL_GetTicks() - frameStartTime;
+            uint32_t targetMs = 1000 / 60;
+            if (targetMs > frameMs)
+            {
+                SDL_Delay(targetMs - frameMs);
+            }
+
+            // TODO: Add flag for turning diagnostics like this on and off
+            // frameMs = SDL_GetTicks() - frameStartTime;
+            // {
+            //     printf("frame took %d ms \n", frameMs);
+            // }
+            frameStartTime = SDL_GetTicks();
         }
     }
 

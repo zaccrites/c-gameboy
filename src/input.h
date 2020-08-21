@@ -23,7 +23,7 @@ struct InputState
 };
 
 
-struct InputState input_get_state(void);
+void input_update(struct InputState *input);
 
 
 #endif

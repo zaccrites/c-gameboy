@@ -222,7 +222,7 @@ static bool handle_interrupt(struct Cpu *cpu, enum Interrupt interrupt)
     cpu->interruptFlags &= ~(1 << (uint8_t)interrupt);
     cpu->ime = false;
     cpu_push_dword(cpu, cpu->pc);
-    cpu->pc = 0x0040 + 0x0008 * (uint16_t)interrupt;;
+    cpu->pc = 0x0040 + 0x0008 * (uint16_t)interrupt;
     return true;
 }
 
@@ -278,12 +278,6 @@ bool cpu_execute_next(struct Cpu *cpu)
     // TODO: Clean up for general instruction trace printing
     bool isUnimplementedInstruction = instruction->impl == NULL;
 
-    char instrNameBuffer[32];
-    write_instruction_name_text(cpu, instruction, instrNameBuffer, sizeof(instrNameBuffer));
-
-    char instrBytesBuffer[16];
-    write_instruction_bytes_text(cpu, instruction, instrBytesBuffer, sizeof(instrBytesBuffer));
-
     // TOOD: Better way-- has to be after write_instruction_bytes_text, but before instruction->impl()
     cpu->pc += (opcode == 0xcb) ? 2 : 1;
 
@@ -291,6 +285,12 @@ bool cpu_execute_next(struct Cpu *cpu)
     // tracing = true;
     if (tracing || isUnimplementedInstruction)
     {
+        char instrNameBuffer[32];
+        write_instruction_name_text(cpu, instruction, instrNameBuffer, sizeof(instrNameBuffer));
+
+        char instrBytesBuffer[16];
+        write_instruction_bytes_text(cpu, instruction, instrBytesBuffer, sizeof(instrBytesBuffer));
+
         // TODO: Move this outside the CPU and have it also print stuff related to
         // the rest of the system (P1 register, LY, LCDC, STAT, IE, IF, etc.)
         fprintf(
@@ -314,6 +314,13 @@ bool cpu_execute_next(struct Cpu *cpu)
 
     if (isUnimplementedInstruction)
     {
+        // TODO: Remove duplicate code, but don't do the work if not tracing or crashing.
+        char instrNameBuffer[32];
+        write_instruction_name_text(cpu, instruction, instrNameBuffer, sizeof(instrNameBuffer));
+
+        char instrBytesBuffer[16];
+        write_instruction_bytes_text(cpu, instruction, instrBytesBuffer, sizeof(instrBytesBuffer));
+
         fprintf(stderr, "Unimplemented instruction ([%s] = \"%s\")! Stopping. \n", instrBytesBuffer, instrNameBuffer);
         return false;
     }

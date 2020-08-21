@@ -4,53 +4,106 @@
 #include "input.h"
 
 
-struct InputState input_get_state(void)
+#define KEYPAD_BUTTON_A       SDLK_s
+#define KEYPAD_BUTTON_B       SDLK_a
+#define KEYPAD_BUTTON_START   SDLK_RETURN
+#define KEYPAD_BUTTON_SELECT  SDLK_RSHIFT
+#define KEYPAD_DPAD_LEFT      SDLK_LEFT
+#define KEYPAD_DPAD_RIGHT     SDLK_RIGHT
+#define KEYPAD_DPAD_UP        SDLK_UP
+#define KEYPAD_DPAD_DOWN      SDLK_DOWN
+
+
+void input_update(struct InputState *input)
 {
-    bool quit = false;
-    bool dumpMemory = false;
+    input->quit = false;
+    input->dumpMemory = false;
 
     SDL_Event event;
     while (SDL_PollEvent(&event))
     {
         if (event.type == SDL_QUIT)
         {
-            quit = true;
+            input->quit = true;
         }
         else if (event.type == SDL_KEYDOWN)
         {
+            if (event.key.repeat)
+            {
+                continue;
+            }
+
             switch (event.key.keysym.sym)
             {
             case SDLK_ESCAPE:
             case SDLK_q:
-                quit = true;
+                input->quit = true;
                 break;
             case SDLK_m:
-                if ( ! event.key.repeat)
-                {
-                    dumpMemory = true;
-                }
+                input->dumpMemory = true;
                 break;
+
+            case KEYPAD_BUTTON_A:
+                input->buttonA = true;
+                break;
+            case KEYPAD_BUTTON_B:
+                input->buttonB = true;
+                break;
+            case KEYPAD_BUTTON_START:
+                input->buttonStart = true;
+                break;
+            case KEYPAD_BUTTON_SELECT:
+                input->buttonSelect = true;
+                break;
+            case KEYPAD_DPAD_LEFT:
+                input->dpadLeft = true;
+                break;
+            case KEYPAD_DPAD_RIGHT:
+                input->dpadRight = true;
+                break;
+            case KEYPAD_DPAD_UP:
+                input->dpadUp = true;
+                break;
+            case KEYPAD_DPAD_DOWN:
+                input->dpadDown = true;
+                break;
+
+            default:
+                break;
+            }
+        }
+        else if (event.type == SDL_KEYUP)
+        {
+            switch (event.key.keysym.sym)
+            {
+            case KEYPAD_BUTTON_A:
+                input->buttonA = false;
+                break;
+            case KEYPAD_BUTTON_B:
+                input->buttonB = false;
+                break;
+            case KEYPAD_BUTTON_START:
+                input->buttonStart = false;
+                break;
+            case KEYPAD_BUTTON_SELECT:
+                input->buttonSelect = false;
+                break;
+            case KEYPAD_DPAD_LEFT:
+                input->dpadLeft = false;
+                break;
+            case KEYPAD_DPAD_RIGHT:
+                input->dpadRight = false;
+                break;
+            case KEYPAD_DPAD_UP:
+                input->dpadUp = false;
+                break;
+            case KEYPAD_DPAD_DOWN:
+                input->dpadDown = false;
+                break;
+
             default:
                 break;
             }
         }
     }
-
-    // Note: Must process events before calling SDL_GetKeyboardState()
-    //       in order to get up-to-date keyboard state.
-    const uint8_t *keystate = SDL_GetKeyboardState(NULL);
-    struct InputState inputState = {
-        .quit = quit,
-        .dumpMemory = dumpMemory,
-
-        .buttonA = keystate[SDL_SCANCODE_S],
-        .buttonB = keystate[SDL_SCANCODE_A],
-        .buttonStart = keystate[SDL_SCANCODE_RETURN],
-        .buttonSelect = keystate[SDL_SCANCODE_RSHIFT],
-        .dpadLeft = keystate[SDL_SCANCODE_LEFT],
-        .dpadRight = keystate[SDL_SCANCODE_RIGHT],
-        .dpadUp = keystate[SDL_SCANCODE_UP],
-        .dpadDown = keystate[SDL_SCANCODE_DOWN],
-    };
-    return inputState;
 }
