@@ -203,93 +203,98 @@ static void ppu_render_line(struct Ppu *ppu, uint8_t *pixelBuffer)
 
     for (uint8_t x0 = 0; x0 < LCD_WIDTH; x0++)
     {
-        // Similarly, find the effective X-coordinate for this pixel, etc.
-        uint8_t x = x0 + ppu->scrollX;
-        size_t tileCoordX = x / BACKGROUND_TILE_WIDTH;
-        size_t tilePixelCoordX = x % BACKGROUND_TILE_WIDTH;
+        enum Color pixelColor = COLOR_LIGHTEST;
 
-        // Once we have the tile grid XY-coordinates,
-        // we can identify the tile grid index for this pixel's tile
-        // (starting with zero at the top-left,
-        // increasing from left-to-right and top-to-bottom).
-        size_t tileIndex = (tileCoordY * TILE_GRID_WIDTH) + tileCoordX;
-
-        // Select the desired tile data pattern table.
-        uint8_t *tilePatternTable = &ppu->memory->vram[
-            ppu->backgroundAndWindowTileDataSelect
-                ? VRAM_TILE_PATTERN_TABLE1_INDEX
-                : VRAM_TILE_PATTERN_TABLE0_INDEX
-        ];
-
-        // Find the tile pattern of interest
-        uint8_t *tilePattern;
-        if (ppu->backgroundTileMapSelect)
+        if (ppu->backgroundDisplayEnable)
         {
-            uint8_t *tileMap = &ppu->memory->vram[VRAM_TILE_BACKGROUND_MAP1_INDEX];
-            uint8_t tilePatternNumber = tileMap[tileIndex];
-            tilePattern = &tilePatternTable[tilePatternNumber * (2 * BACKGROUND_TILE_WIDTH)];
+            // Similarly, find the effective X-coordinate for this pixel, etc.
+            uint8_t x = x0 + ppu->scrollX;
+            size_t tileCoordX = x / BACKGROUND_TILE_WIDTH;
+            size_t tilePixelCoordX = x % BACKGROUND_TILE_WIDTH;
+
+            // Once we have the tile grid XY-coordinates,
+            // we can identify the tile grid index for this pixel's tile
+            // (starting with zero at the top-left,
+            // increasing from left-to-right and top-to-bottom).
+            size_t tileIndex = (tileCoordY * TILE_GRID_WIDTH) + tileCoordX;
+
+            // Select the desired tile map.
+            uint8_t *tileMap = &ppu->memory->vram[
+                ppu->backgroundTileMapSelect
+                    ? VRAM_TILE_BACKGROUND_MAP1_INDEX
+                    : VRAM_TILE_BACKGROUND_MAP0_INDEX
+            ];
+
+            // Find the tile pattern of interest
+            uint8_t *tilePattern;
+            if (ppu->backgroundAndWindowTileDataSelect)
+            {
+                uint8_t *tilePatternTable = &ppu->memory->vram[VRAM_TILE_PATTERN_TABLE1_INDEX];
+                uint8_t tilePatternNumber = tileMap[tileIndex];
+                tilePattern = &tilePatternTable[tilePatternNumber * (2 * BACKGROUND_TILE_WIDTH)];
+            }
+            else
+            {
+                uint8_t *tilePatternTable = &ppu->memory->vram[VRAM_TILE_PATTERN_TABLE0_INDEX];
+                int8_t tilePatternNumber = ((int8_t*)tileMap)[tileIndex];
+                tilePattern = &tilePatternTable[tilePatternNumber * (2 * BACKGROUND_TILE_WIDTH)];
+            }
+
+            // Get the tile pattern line of interest,
+            // and the color number of the pixel of interest.
+            uint8_t *tilePatternLine = tilePattern + 2 * tilePixelCoordY;
+            uint8_t backgroundColorNumber = (
+                ((tilePatternLine[1] & (1 << (7 - tilePixelCoordX))) << 1) |
+                (tilePatternLine[0] & (1 << (7 - tilePixelCoordX)))
+            ) >> (7 - tilePixelCoordX);
+            pixelColor = get_background_palette_color(ppu, backgroundColorNumber);
         }
-        else
-        {
-            int8_t *tileMap = (int8_t*)&ppu->memory->vram[VRAM_TILE_BACKGROUND_MAP0_INDEX];
-            int8_t tilePatternNumber = tileMap[tileIndex];
-            tilePattern = &tilePatternTable[tilePatternNumber * (2 * BACKGROUND_TILE_WIDTH)];
-        }
-
-        // Get the tile pattern line of interest,
-        // and the color number of the pixel of interest.
-        uint8_t *tilePatternLine = tilePattern + 2 * tilePixelCoordY;
-        uint8_t backgroundColorNumber = (
-            ((tilePatternLine[1] & (1 << (7 - tilePixelCoordX))) << 1) |
-            (tilePatternLine[0] & (1 << (7 - tilePixelCoordX)))
-        ) >> (7 - tilePixelCoordX);
-        enum Color pixelColor = get_background_palette_color(ppu, backgroundColorNumber);
-
-
 
         // TODO: clean up sprite code
         // TODO: 8x16 mode tile selection
 
         // Now look at the objects for this pixel
-        for (size_t i = 0; i < numObjectsOnLine; i++)
+        if (ppu->objectDisplayEnable)
         {
-            // We already know that the object is visible.
-            // The question is which object pixel aligns with the screen pixel
-            // we're looking at now, if any.
-
-            int16_t currentLine = ppu->currentLine;
-            int16_t objectWidth = 8;  // constant
-            int16_t objectHeight = (ppu->objectSize == OBJECT_SIZE_8x16) ? 16 : 8;
-            // bool currentlyAbove = currentLine <= y - objectHeight;
-            // bool currentlyBelow = currentLine >= y;
-
-            const struct Object *obj = &objects[i];
-            int16_t objectPixelY = (currentLine - obj->y) + 2*objectHeight;
-            int16_t objectPixelX = ((int16_t)x0 - obj->x) + objectWidth;
-            if (objectPixelX >= 0 && objectPixelX < 8)
+            for (size_t i = 0; i < numObjectsOnLine; i++)
             {
-                size_t tilePatternIndex = obj->patternIndex;
-                uint8_t *tilePixelData = &ppu->memory->vram[16 * tilePatternIndex];  // TODO: may need to change this for 8x16 sprites
-                uint8_t *tileLinePixelData = tilePixelData + 2 * (uint8_t)(obj->yFlip ? (7 - objectPixelY) : objectPixelY);  // TODO: may need to change this for 8x16 sprites
-                uint8_t tileByte0 = tileLinePixelData[0];
-                uint8_t tileByte1 = tileLinePixelData[1];
+                // We already know that the object is visible.
+                // The question is which object pixel aligns with the screen pixel
+                // we're looking at now, if any.
 
-                // TODO: clean up, combine with BG version of this
-                uint8_t xShift = obj->xFlip ? objectPixelX : (7 - objectPixelX);
-                uint8_t objectColorNumber = (
-                        ((tileByte1 & (1 << xShift)) << 1) |
-                        (tileByte0 & (1 << xShift))
-                ) >> xShift;
+                int16_t currentLine = ppu->currentLine;
+                int16_t objectWidth = 8;  // constant
+                int16_t objectHeight = (ppu->objectSize == OBJECT_SIZE_8x16) ? 16 : 8;
+                // bool currentlyAbove = currentLine <= y - objectHeight;
+                // bool currentlyBelow = currentLine >= y;
 
-                enum Color objectPixelColor;
-                bool isNotTransparent = get_object_palette_color(ppu, obj->palette, objectColorNumber, &objectPixelColor);
-                if (isNotTransparent && ! obj->priority)
+                const struct Object *obj = &objects[i];
+                int16_t objectPixelY = (currentLine - obj->y) + 2*objectHeight;
+                int16_t objectPixelX = ((int16_t)x0 - obj->x) + objectWidth;
+                if (objectPixelX >= 0 && objectPixelX < 8)
                 {
-                    pixelColor = objectPixelColor;
+                    size_t tilePatternIndex = obj->patternIndex;
+                    uint8_t *tilePixelData = &ppu->memory->vram[16 * tilePatternIndex];  // TODO: may need to change this for 8x16 sprites
+                    uint8_t *tileLinePixelData = tilePixelData + 2 * (uint8_t)(obj->yFlip ? (7 - objectPixelY) : objectPixelY);  // TODO: may need to change this for 8x16 sprites
+                    uint8_t tileByte0 = tileLinePixelData[0];
+                    uint8_t tileByte1 = tileLinePixelData[1];
+
+                    // TODO: clean up, combine with BG version of this
+                    uint8_t xShift = obj->xFlip ? objectPixelX : (7 - objectPixelX);
+                    uint8_t objectColorNumber = (
+                            ((tileByte1 & (1 << xShift)) << 1) |
+                            (tileByte0 & (1 << xShift))
+                    ) >> xShift;
+
+                    enum Color objectPixelColor;
+                    bool isNotTransparent = get_object_palette_color(ppu, obj->palette, objectColorNumber, &objectPixelColor);
+                    if (isNotTransparent && ! obj->priority)
+                    {
+                        pixelColor = objectPixelColor;
+                    }
                 }
             }
         }
-
 
         uint8_t r, g, b;
         get_color_rgb(pixelColor, &r, &g, &b);
@@ -314,7 +319,8 @@ static void ppu_render_line(struct Ppu *ppu, uint8_t *pixelBuffer)
 
 bool ppu_tick(struct Ppu *ppu, struct Cpu *cpu, int cycles, uint8_t *pixelBuffer)
 {
-    // TODO: LCD disabled? Would have to blank the whole screen.
+    // TODO: LCD disabled? Would have to blank the whole display and reset
+    // the line/cycle counter and PPU state machine.
 
     bool enteringVBlank = false;
 
