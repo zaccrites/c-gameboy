@@ -3,6 +3,15 @@
 
 A Nintendo GameBoy emulator implemented in C
 
+![Tetris](screenshots/tetris.png "Tetris")
+![Dr. Mario](screenshots/dr_mario.png "Dr. Mario")
+
+
+## Running
+
+    ~/c-gameboy-build/emulator $PATH_TO_ROM_FILE
+    ~/c-gameboy-build/emulator --help
+
 
 ## Development
 
@@ -13,12 +22,7 @@ A Nintendo GameBoy emulator implemented in C
     make -C ~/c-gameboy-build
 
 
-## Running
-
-    ~/c-gameboy-build/emulator $PATH_TO_ROM_FILE
-
-
-## Debugging Tips
+### Debugging Tips
 
 Use the `m` key to dump each memory section to a file.
 For ease of inspection on the command line, these commands are useful:
@@ -28,6 +32,9 @@ For ease of inspection on the command line, these commands are useful:
 # For OAM: bytes are Y, X, pattern number, and flags
 xxd -g1 -c4 -o 0xfe00 oam.bin | nl -w2 -s'  '
 
-
-
 ```
+
+
+## License
+
+This project is released under the [MIT License](https://opensource.org/licenses/MIT)
