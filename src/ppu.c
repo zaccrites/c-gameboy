@@ -203,6 +203,7 @@ static void ppu_render_line(struct Ppu *ppu, uint8_t *pixelBuffer)
 
     for (uint8_t x0 = 0; x0 < LCD_WIDTH; x0++)
     {
+        uint8_t backgroundColorNumber = 0;
         enum Color pixelColor = COLOR_LIGHTEST;
 
         if (ppu->backgroundDisplayEnable)
@@ -243,7 +244,7 @@ static void ppu_render_line(struct Ppu *ppu, uint8_t *pixelBuffer)
             // Get the tile pattern line of interest,
             // and the color number of the pixel of interest.
             uint8_t *tilePatternLine = tilePattern + 2 * tilePixelCoordY;
-            uint8_t backgroundColorNumber = (
+            backgroundColorNumber = (
                 ((tilePatternLine[1] & (1 << (7 - tilePixelCoordX))) << 1) |
                 (tilePatternLine[0] & (1 << (7 - tilePixelCoordX)))
             ) >> (7 - tilePixelCoordX);
@@ -288,8 +289,11 @@ static void ppu_render_line(struct Ppu *ppu, uint8_t *pixelBuffer)
 
                     enum Color objectPixelColor;
                     bool isNotTransparent = get_object_palette_color(ppu, obj->palette, objectColorNumber, &objectPixelColor);
-                    if (isNotTransparent && ! obj->priority)
+                    if (isNotTransparent && ( ! obj->priority || backgroundColorNumber == 0))
                     {
+                        // The "priority" flag is kind of an inversion--
+                        // if it is set, the object's will only draw on top
+                        // of background pixels of color number 0.
                         pixelColor = objectPixelColor;
                     }
                 }
