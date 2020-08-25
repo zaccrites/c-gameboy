@@ -18,6 +18,7 @@ static void print_help(void)
         "  rom_path : Path to GameBoy ROM .gb file \n"
         "\n"
         "Options: \n"
+        "  --headless          : Run the emulator without a display (for testing) \n"
         "  --help              : Display this message and quit \n"
         "  --serial-out <path> : Path to file to log bytes written to the serial link port \n"
         "  --small             : Size display window accurate to a real GameBoy LCD (it is shown 4x wider and taller by default) \n"
@@ -30,6 +31,7 @@ int parse_options(int argc, char **argv, struct Options *options)
     options->romPath = NULL;
     options->serialOutPath = NULL;
     options->exitEarly = false;
+    options->graphics.headless = false;
     options->graphics.smallWindow = false;
 
     for (int i = 0; i < argc; i++)
@@ -37,7 +39,11 @@ int parse_options(int argc, char **argv, struct Options *options)
         const char *arg = argv[i];
         if (starts_with(arg, "--"))
         {
-            if (strcmp(arg, "--help") == 0)
+            if (strcmp(arg, "--headless") == 0)
+            {
+                options->graphics.headless = true;
+            }
+            else if (strcmp(arg, "--help") == 0)
             {
                 options->exitEarly = true;
                 print_help();

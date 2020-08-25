@@ -12,6 +12,7 @@
 struct GraphicsOptions
 {
     bool smallWindow;
+    bool headless;
 };
 
 

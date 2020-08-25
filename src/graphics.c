@@ -4,15 +4,28 @@
 
 void graphics_update(struct Graphics* graphics)
 {
-    SDL_UpdateTexture(graphics->sdlCanvasTexture, NULL, graphics->pixelBuffer, 4 * LCD_WIDTH);
-    SDL_RenderCopy(graphics->sdlRenderer, graphics->sdlCanvasTexture, NULL, NULL);
-    SDL_RenderPresent(graphics->sdlRenderer);
+    if (graphics->sdlWindow != NULL)
+    {
+        SDL_UpdateTexture(graphics->sdlCanvasTexture, NULL, graphics->pixelBuffer, 4 * LCD_WIDTH);
+        SDL_RenderCopy(graphics->sdlRenderer, graphics->sdlCanvasTexture, NULL, NULL);
+        SDL_RenderPresent(graphics->sdlRenderer);
+    }
 }
 
 
 bool graphics_init(struct Graphics *graphics, struct GraphicsOptions *options)
 {
     // TODO: Error handling and reporting
+
+    if (options->headless)
+    {
+        // FUTURE: Could possibly still record video and/or screenshots
+        //   while running in headless mode, even if there's not SDL window.
+        graphics->sdlWindow = NULL;
+        graphics->sdlRenderer = NULL;
+        graphics->sdlCanvasTexture = NULL;
+        return true;
+    }
 
     int windowWidth = LCD_WIDTH;
     int windowHeight = LCD_HEIGHT;
@@ -52,15 +65,6 @@ bool graphics_init(struct Graphics *graphics, struct GraphicsOptions *options)
     {
         return false;
     }
-
-    for (unsigned int i = 0; i < sizeof(graphics->pixelBuffer); i += 4)
-    {
-        graphics->pixelBuffer[i + 0] = 237;  // B
-        graphics->pixelBuffer[i + 1] = 149;  // G
-        graphics->pixelBuffer[i + 2] = 100;  // R
-        graphics->pixelBuffer[i + 3] = 255;  // A
-    }
-    graphics_update(graphics);
 
     return true;
 }

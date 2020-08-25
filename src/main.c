@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <assert.h>
+#include <signal.h>
 
 #include "options.h"
 #include "input.h"
@@ -47,8 +48,20 @@ static void teardown_serial_log_file(FILE* file)
 }
 
 
+static bool sigint_caught = false;
+static void signal_handler(sig_atomic_t sig)
+{
+    if (sig == SIGINT)
+    {
+        sigint_caught = true;
+    }
+}
+
+
 int main(int argc, char **argv)
 {
+    signal(SIGINT, signal_handler);
+
     struct Options options;
     int statusCode = parse_options(argc, argv, &options);
     if (statusCode != 0 || options.exitEarly)
@@ -141,10 +154,13 @@ int main(int argc, char **argv)
         bool serialTransferComplete = serial_tick(&serial, &cpu, instructionCycles);
         if (serialTransferComplete && serialLogFile != NULL)
         {
+            // Flush the output immediately so that test scripts watching
+            // the output know when the test completes.
             fwrite(&serial.outgoingData, sizeof(serial.outgoingData), 1, serialLogFile);
+            fflush(serialLogFile);
         }
 
-        if (inputState.quit)
+        if (inputState.quit || sigint_caught)
         {
             isRunning = false;
         }
@@ -155,7 +171,13 @@ int main(int argc, char **argv)
 
         if (enteringVBlank)
         {
-            input_update(&inputState);
+            // TODO: Provide a recorded input system for headless mode
+            //   (although could also be useful for non-headless demos)
+            if ( ! options.graphics.headless)
+            {
+                input_update(&inputState);
+            }
+
             graphics_update(&graphics);
 
             uint32_t frameMs = SDL_GetTicks() - frameStartTime;
