@@ -30,15 +30,13 @@ static void write_flags_byte(struct Cpu *cpu, uint8_t value)
 #define IO_REGISTER_INTERRUPT_FLAGS  0x0f
 static uint8_t io_handler_read_interrupt_flags(IoRegisterFuncContext context)
 {
-    // TODO: mask?
     struct Cpu *cpu = context;
     return cpu->interruptFlags;
 }
 static void io_handler_write_interrupt_flags(IoRegisterFuncContext context, uint8_t value)
 {
-    // TODO: mask?
     struct Cpu *cpu = context;
-    cpu->interruptFlags = value;
+    cpu->interruptFlags = value & 0x1f;
 }
 
 
@@ -74,6 +72,7 @@ void cpu_init(struct Cpu *cpu, struct Memory *memory)
     cpu->sp = 0xfffe;
     cpu->ime = true;
     cpu->halted = false;
+    cpu->imeState = INTERRUPT_ENABLE_IDLE;
 
     cpu->interruptFlags = 0x00;  // TODO
     cpu->interruptEnable = 0x00;  // TODO
@@ -283,6 +282,7 @@ bool cpu_execute_next(struct Cpu *cpu)
 
     static bool tracing = false;
     // tracing = true;
+    // tracing = cpu->pc == 0x0089;
     if (tracing || isUnimplementedInstruction)
     {
         char instrNameBuffer[32];
@@ -314,17 +314,22 @@ bool cpu_execute_next(struct Cpu *cpu)
 
     if (isUnimplementedInstruction)
     {
-        // TODO: Remove duplicate code, but don't do the work if not tracing or crashing.
-        char instrNameBuffer[32];
-        write_instruction_name_text(cpu, instruction, instrNameBuffer, sizeof(instrNameBuffer));
-
-        char instrBytesBuffer[16];
-        write_instruction_bytes_text(cpu, instruction, instrBytesBuffer, sizeof(instrBytesBuffer));
-
-        fprintf(stderr, "Unimplemented instruction ([%s] = \"%s\")! Stopping. \n", instrBytesBuffer, instrNameBuffer);
+        fprintf(stderr, "Unimplemented opcode 0x%02x! Stopping. \n", opcode);
         return false;
     }
 
     instruction->impl(cpu);
+
+    if (cpu->imeState == INTERRUPT_ENABLE_ENABLE_NEXT)
+    {
+        cpu->ime = true;
+        cpu->imeState = INTERRUPT_ENABLE_IDLE;
+    }
+    else if (cpu->imeState == INTERRUPT_ENABLE_DISABLE_NEXT)
+    {
+        cpu->ime = false;
+        cpu->imeState = INTERRUPT_ENABLE_IDLE;
+    }
+
     return true;
 }

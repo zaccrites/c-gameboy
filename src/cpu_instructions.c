@@ -61,14 +61,12 @@ static void nop(struct Cpu *cpu)
 
 static void di(struct Cpu *cpu)
 {
-    // TODO: Wait to disable interrupts until the next instruction completes
-    cpu->ime = false;
+    cpu->imeState = INTERRUPT_ENABLE_DISABLE_NEXT;
 }
 
 static void ei(struct Cpu *cpu)
 {
-    // TODO: Wait to enable interrupts until the next instruction completes
-    cpu->ime = true;
+    cpu->imeState = INTERRUPT_ENABLE_ENABLE_NEXT;
 }
 
 static void halt(struct Cpu *cpu)
@@ -239,13 +237,12 @@ static uint16_t add_signed_word_to_dword(struct Cpu *cpu, uint16_t dword, int16_
     cpu->flags.carry = (tmp & 0x100) == 0x100;
     return total;
 }
-
-static void ld_hl_sp_plus_r(struct Cpu *cpu)
+static void ld_hl_sp_plus_n(struct Cpu *cpu)
 {
     uint16_t hl = add_signed_word_to_dword(cpu, cpu->sp, imm_word(cpu));
     cpu_write_double_reg(cpu, CPU_DOUBLE_REG_HL, hl);
 }
-static void add_sp_r(struct Cpu *cpu)
+static void add_sp_n(struct Cpu *cpu)
 {
     cpu->sp = add_signed_word_to_dword(cpu, cpu->sp, imm_word(cpu));
 }
@@ -1341,7 +1338,7 @@ const struct Instruction instructions[256] = {
     { "PUSH HL",         0, push_hl },
     { "AND 0x%02x",      1, and_d8 },
     { "RST 0x20",        0, rst20 },
-    { "ADD SP, %hhd",    1, add_sp_r },
+    { "ADD SP, %hhd",    1, add_sp_n },
     { "JP (HL)",         0, jp_hl },
     { "LD (0x%04x), A",  2, ld_mem_a16_a },
     { "<undocumented>",  0, NULL },
@@ -1359,7 +1356,7 @@ const struct Instruction instructions[256] = {
     { "PUSH AF",         0, push_af },
     { "OR 0x%02x",       1, or_d8 },
     { "RST 0x30",        0, rst30 },
-    { "LD HL, SP%+d",    1, ld_hl_sp_plus_r },
+    { "LD HL, SP%+d",    1, ld_hl_sp_plus_n },
     { "LD SP, HL",       0, ld_sp_hl },
     { "LD A, (0x%04x)",  2, ld_a_mem_a16 },
     { "EI",              0, ei },

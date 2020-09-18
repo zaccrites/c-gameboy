@@ -27,6 +27,14 @@ enum CpuDoubleRegister
 };
 
 
+enum InterruptEnableState
+{
+    INTERRUPT_ENABLE_IDLE,
+    INTERRUPT_ENABLE_ENABLE_NEXT,
+    INTERRUPT_ENABLE_DISABLE_NEXT,
+};
+
+
 struct Cpu
 {
     uint16_t pc;
@@ -53,6 +61,7 @@ struct Cpu
 
     bool ime;
     bool halted;
+    enum InterruptEnableState imeState;
 
     uint8_t interruptFlags;
     uint8_t interruptEnable;

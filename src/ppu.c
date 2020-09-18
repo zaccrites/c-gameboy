@@ -28,14 +28,13 @@ struct Object
 
 static int object_object_render_sorting(const void *rawObj1, const void *rawObj2)
 {
-    // Objects with lower X coords are drawn over objects with
-    // larger X coords. Therefore we sort the array in descending
-    // X coords so that the final sprite drawn will be the one with the
-    // smallest X coord.
+    // Objects with lower X-coord are drawn over objects with
+    // larger X-coord. Therefore we sort the array by descending
+    // X-coord so that the final sprite drawn will be the one with the
+    // smallest X-coord.
     //
-    // Objects with the same X coord will be sorted in descending index
-    // number in OAM so that the sprite with the lowest number is drawn
-    // first in that case.
+    // Objects with the same X-coord will be sorted in descending index
+    // number in OAM (i.e. the sprite with the lowest number is drawn)
 
     const struct Object *obj1 = rawObj1;
     const struct Object *obj2 = rawObj2;
@@ -63,12 +62,8 @@ static int object_object_render_sorting(const void *rawObj1, const void *rawObj2
 }
 
 
-
-
 #define OBJECT_SIZE_8x16  true
 #define OBJECT_SIZE_8x8   false
-
-
 
 // Find which objects are visible on this scan line
 static size_t oam_search(struct Ppu *ppu, struct Object *objects)
@@ -81,27 +76,13 @@ static size_t oam_search(struct Ppu *ppu, struct Object *objects)
         uint8_t *rawObject = &ppu->memory->oam[4 * i];
         int16_t y = rawObject[0];
 
-        if (y != 0)
-        {
-            // printf("OBJECT %lu X=0x%02x, Y=0x%02x \n", i, rawObject[1], rawObject[0]);
-        }
-
         int16_t currentLine = ppu->currentLine;
 
         // For e.g. 16px tall objects, the first visible line is LY=0 when Y=16.
         int16_t objectHeight = (ppu->objectSize == OBJECT_SIZE_8x16) ? 16 : 8;
         bool currentlyAbove = currentLine < y - objectHeight * 2;
         bool currentlyBelow = currentLine >= y - objectHeight;
-        // bool currentlyAbove = currentLine <= y - objectHeight;
-        // bool currentlyBelow = currentLine >= y;
         bool objectVisible = ! (currentlyAbove || currentlyBelow);
-
-        if (objectVisible  && false)
-        {
-            printf("currentLine = %d, y = %d, y - objectHeight = %d | currentlyAbove? = %d, currentlyBelow? = %d \n",
-                currentLine, y, y - objectHeight,
-                currentlyAbove, currentlyBelow);
-        }
 
         if (objectVisible)
         {
@@ -140,7 +121,6 @@ static bool get_object_palette_color(struct Ppu *ppu, bool paletteFlag, uint8_t 
     *color = palette[colorNumber - 1];
     return true;
 }
-
 
 
 static void get_color_rgb(enum Color color, uint8_t *r, uint8_t *g, uint8_t *b)
@@ -266,11 +246,9 @@ static void ppu_render_line(struct Ppu *ppu, uint8_t *pixelBuffer)
                 int16_t currentLine = ppu->currentLine;
                 int16_t objectWidth = 8;  // constant
                 int16_t objectHeight = (ppu->objectSize == OBJECT_SIZE_8x16) ? 16 : 8;
-                // bool currentlyAbove = currentLine <= y - objectHeight;
-                // bool currentlyBelow = currentLine >= y;
 
                 const struct Object *obj = &objects[i];
-                int16_t objectPixelY = (currentLine - obj->y) + 2*objectHeight;
+                int16_t objectPixelY = (currentLine - obj->y) + 2 * objectHeight;
                 int16_t objectPixelX = ((int16_t)x0 - obj->x) + objectWidth;
                 if (objectPixelX >= 0 && objectPixelX < 8)
                 {
@@ -289,11 +267,11 @@ static void ppu_render_line(struct Ppu *ppu, uint8_t *pixelBuffer)
 
                     enum Color objectPixelColor;
                     bool isNotTransparent = get_object_palette_color(ppu, obj->palette, objectColorNumber, &objectPixelColor);
-                    if (isNotTransparent && ( ! obj->priority || backgroundColorNumber == 0))
+                    if (isNotTransparent && (backgroundColorNumber == 0 || ! obj->priority))
                     {
                         // The "priority" flag is kind of an inversion--
-                        // if it is set, the object's will only draw on top
-                        // of background pixels of color number 0.
+                        // if it is set, the object's pixel will only draw on
+                        // top of background pixels of color number 0.
                         pixelColor = objectPixelColor;
                     }
                 }
@@ -312,13 +290,48 @@ static void ppu_render_line(struct Ppu *ppu, uint8_t *pixelBuffer)
 }
 
 
-
 #define CYCLES_MODE_OAM_SEARCH  20
 #define CYCLES_MODE_DRAWING     43
 #define CYCLES_MODE_HBLANK      51
 #define CYCLES_PER_LINE         (CYCLES_MODE_OAM_SEARCH + CYCLES_MODE_DRAWING + CYCLES_MODE_HBLANK)
 
 #define NUM_VBLANK_LINES        10
+
+
+static void ppu_switch_mode(struct Ppu *ppu, struct Cpu *cpu, enum PpuMode mode)
+{
+    ppu->mode = mode;
+    switch (mode)
+    {
+    case PPU_MODE_HBLANK:
+        ppu->stat.hBlank = true;
+        break;
+    case PPU_MODE_VBLANK:
+        ppu->stat.vBlank = true;
+        break;
+    case PPU_MODE_OAM_SEARCH:
+        ppu->stat.oamSearch = true;
+    case PPU_MODE_DRAWING:
+    default:
+        return;
+    }
+    cpu_request_interrupt(cpu, INTERRUPT_LCDC);
+}
+
+static void ppu_advance_line(struct Ppu *ppu, struct Cpu *cpu)
+{
+    ppu->currentLine += 1;
+    if (ppu->currentLine >= LCD_HEIGHT + NUM_VBLANK_LINES)
+    {
+        ppu->currentLine = 0;
+        ppu_switch_mode(ppu, cpu, PPU_MODE_OAM_SEARCH);
+    }
+    if (ppu->currentLine == ppu->currentLineCompare)
+    {
+        ppu->stat.lyc = true;
+        cpu_request_interrupt(cpu, INTERRUPT_LCDC);
+    }
+}
 
 
 bool ppu_tick(struct Ppu *ppu, struct Cpu *cpu, int cycles, uint8_t *pixelBuffer)
@@ -336,7 +349,7 @@ bool ppu_tick(struct Ppu *ppu, struct Cpu *cpu, int cycles, uint8_t *pixelBuffer
         if (ppu->cycleCounter >= CYCLES_MODE_OAM_SEARCH)
         {
             ppu->cycleCounter = 0;
-            ppu->mode = PPU_MODE_DRAWING;
+            ppu_switch_mode(ppu, cpu, PPU_MODE_DRAWING);
             // TODO: VRAM/OAM lock
         }
         break;
@@ -344,7 +357,7 @@ bool ppu_tick(struct Ppu *ppu, struct Cpu *cpu, int cycles, uint8_t *pixelBuffer
         if (ppu->cycleCounter >= CYCLES_MODE_DRAWING)
         {
             ppu->cycleCounter = 0;
-            ppu->mode = PPU_MODE_HBLANK;
+            ppu_switch_mode(ppu, cpu, PPU_MODE_HBLANK);
             // TODO: VRAM/OAM lock
         }
         break;
@@ -353,16 +366,17 @@ bool ppu_tick(struct Ppu *ppu, struct Cpu *cpu, int cycles, uint8_t *pixelBuffer
         {
             ppu->cycleCounter = 0;
             ppu_render_line(ppu, pixelBuffer);
-            ppu->currentLine += 1;
+            ppu_advance_line(ppu, cpu);
             if (ppu->currentLine >= LCD_HEIGHT)
             {
                 ppu->mode = PPU_MODE_VBLANK;
+                ppu_switch_mode(ppu, cpu, PPU_MODE_VBLANK);
                 cpu_request_interrupt(cpu, INTERRUPT_VBLANK);
                 enteringVBlank = true;
             }
             else
             {
-                ppu->mode = PPU_MODE_OAM_SEARCH;
+                ppu_switch_mode(ppu, cpu, PPU_MODE_OAM_SEARCH);
             }
         }
         break;
@@ -370,12 +384,7 @@ bool ppu_tick(struct Ppu *ppu, struct Cpu *cpu, int cycles, uint8_t *pixelBuffer
         if (ppu->cycleCounter > CYCLES_PER_LINE)
         {
             ppu->cycleCounter = 0;
-            ppu->currentLine += 1;
-            if (ppu->currentLine >= LCD_HEIGHT + NUM_VBLANK_LINES)
-            {
-                ppu->currentLine = 0;
-                ppu->mode = PPU_MODE_OAM_SEARCH;
-            }
+            ppu_advance_line(ppu, cpu);
         }
         break;
     default:
@@ -419,17 +428,23 @@ static void io_handler_write_lcd_control(IoRegisterFuncContext context, uint8_t 
 #define IO_REGISTER_LCDC_STATUS  0x41
 static uint8_t io_handler_read_lcdc_status(IoRegisterFuncContext context)
 {
-    // TODO
     struct Ppu *ppu = context;
-    (void)ppu;
-    return 0;
+    uint8_t value = 0xc0;
+    value |= ppu->stat.oamSearch ? (1 << 5) : 0;
+    value |= ppu->stat.hBlank ? (1 << 4) : 0;
+    value |= ppu->stat.vBlank ? (1 << 3) : 0;
+    value |= ppu->stat.lyc ? (1 << 2) : 0;
+    value |= (uint8_t)ppu->mode;
+    return value;
 }
 static void io_handler_write_lcdc_status(IoRegisterFuncContext context, uint8_t value)
 {
-    // TODO
     struct Ppu *ppu = context;
-    (void)value;
-    (void)ppu;
+    printf("Wrote 0x%02x to STAT \n", value);
+    ppu->stat.oamSearch = (value & (1 << 5)) != 0;
+    ppu->stat.hBlank = (value & (1 << 4)) != 0;
+    ppu->stat.vBlank = (value & (1 << 3)) != 0;
+    ppu->stat.lyc = (value & (1 << 2)) != 0;
 }
 
 
@@ -454,6 +469,7 @@ static uint8_t io_handler_read_scroll_x(IoRegisterFuncContext context)
 static void io_handler_write_scroll_x(IoRegisterFuncContext context, uint8_t value)
 {
     struct Ppu *ppu = context;
+    // printf("Set SCX to 0x%02x on line %d \n", value, ppu->currentLine);
     ppu->scrollX = value;
 }
 
@@ -573,7 +589,6 @@ static void io_handler_write_window_x(IoRegisterFuncContext context, uint8_t val
 }
 
 
-
 void ppu_init(struct Ppu *ppu, struct Memory *memory)
 {
     ppu->cycleCounter = 0;
@@ -584,6 +599,11 @@ void ppu_init(struct Ppu *ppu, struct Memory *memory)
     ppu->scrollY = 0;
     ppu->windowX = 0;
     ppu->windowY = 0;
+
+    ppu->stat.oamSearch = false;
+    ppu->stat.hBlank = false;
+    ppu->stat.vBlank = false;
+    ppu->stat.lyc = false;
 
     ppu->lcdEnable = true;
     ppu->windowTileMapSelect = false;

@@ -15,13 +15,11 @@ struct Timer
     int divIncrementCyclesLeft;
     uint8_t tma;
 
-
     uint8_t cyclesPerTick;
     bool stopped;
 
     uint8_t tima;
     int timaIncrementCyclesLeft;
-
 };
 
 

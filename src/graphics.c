@@ -20,7 +20,7 @@ bool graphics_init(struct Graphics *graphics, struct GraphicsOptions *options)
     if (options->headless)
     {
         // FUTURE: Could possibly still record video and/or screenshots
-        //   while running in headless mode, even if there's not SDL window.
+        //   while running in headless mode, even if there's no SDL window.
         graphics->sdlWindow = NULL;
         graphics->sdlRenderer = NULL;
         graphics->sdlCanvasTexture = NULL;
@@ -73,6 +73,8 @@ bool graphics_init(struct Graphics *graphics, struct GraphicsOptions *options)
 
 void graphics_teardown(struct Graphics *graphics)
 {
+    bool doQuit = graphics->sdlWindow != NULL;
+
     if (graphics->sdlCanvasTexture != NULL)
     {
         SDL_DestroyTexture(graphics->sdlCanvasTexture);
@@ -91,5 +93,8 @@ void graphics_teardown(struct Graphics *graphics)
         graphics->sdlWindow = NULL;
     }
 
-    SDL_Quit();
+    if (doQuit)
+    {
+        SDL_Quit();
+    }
 }

@@ -76,7 +76,7 @@ static void handle_rom_write(struct Memory *memory, uint16_t address, uint8_t va
         // TODO
         (void)address;
         (void)value;
-        printf("Wrote 0x%02x to ROM address: 0x%04x \n", value, address);
+        // printf("Wrote 0x%02x to ROM address: 0x%04x \n", value, address);
         // assert(false);
 
         // TODO: Do this properly. This is wrong.
@@ -88,7 +88,7 @@ static void handle_rom_write(struct Memory *memory, uint16_t address, uint8_t va
                 memory->selectedRomBank = 1;
             }
 
-            printf("Selected ROM bank %ld \n", memory->selectedRomBank);
+            // printf("Selected ROM bank %ld \n", memory->selectedRomBank);
         }
 
     }

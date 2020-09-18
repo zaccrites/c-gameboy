@@ -40,6 +40,14 @@ struct Ppu
     uint8_t windowX;
     uint8_t windowY;
 
+    struct
+    {
+        bool oamSearch;
+        bool hBlank;
+        bool vBlank;
+        bool lyc;
+    } stat;
+
     bool lcdEnable;
     bool windowTileMapSelect;
     bool windowDisplayEnable;

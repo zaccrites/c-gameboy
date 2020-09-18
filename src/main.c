@@ -171,6 +171,8 @@ int main(int argc, char **argv)
 
         if (enteringVBlank)
         {
+            // printf("ppu->scrollX = %d \n", ppu.scrollX);
+
             // TODO: Provide a recorded input system for headless mode
             //   (although could also be useful for non-headless demos)
             if ( ! options.graphics.headless)
